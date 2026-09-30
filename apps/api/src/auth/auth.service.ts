@@ -33,6 +33,7 @@ function slugify(name: string): string {
 }
 
 export interface SessionIssueResult {
+  id: string;
   token: string;
   expiresAt: Date;
 }
@@ -88,14 +89,52 @@ export class AuthService {
     if (!valid) throw Errors.invalidCredentials();
 
     const session = await this.issueSession(user.id, meta);
+
+    // Authentication events are audit-worthy in their own right (docs/security.md
+    // "Audit logging"), not just record mutations. AuditLog is org-scoped by
+    // design (see database.md), so a login is only recorded against the
+    // organization it actually resolves to — a user with no membership yet
+    // has no tenant trail to attach it to, and that's fine.
+    const orgId = await this.firstActiveOrganizationId(user.id);
+    if (orgId) {
+      await this.audit.record({
+        organizationId: orgId,
+        actorUserId: user.id,
+        entityType: "Session",
+        entityId: session.id,
+        action: "LOGIN_SUCCESS",
+        after: { ipAddress: meta.ipAddress },
+      });
+    }
+
     return { user, session };
   }
 
   async logout(sessionId: string) {
-    await this.prisma.client.session.update({
+    const session = await this.prisma.client.session.update({
       where: { id: sessionId },
       data: { revokedAt: new Date() },
     });
+
+    const orgId = await this.firstActiveOrganizationId(session.userId);
+    if (orgId) {
+      await this.audit.record({
+        organizationId: orgId,
+        actorUserId: session.userId,
+        entityType: "Session",
+        entityId: session.id,
+        action: "LOGOUT",
+      });
+    }
+  }
+
+  private async firstActiveOrganizationId(userId: string): Promise<string | null> {
+    const membership = await this.prisma.client.membership.findFirst({
+      where: { userId, status: "ACTIVE" },
+      orderBy: { createdAt: "asc" },
+      select: { organizationId: true },
+    });
+    return membership?.organizationId ?? null;
   }
 
   async logoutAllSessions(userId: string) {
@@ -207,7 +246,7 @@ export class AuthService {
   ): Promise<SessionIssueResult> {
     const token = generateSessionToken();
     const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
-    await this.prisma.client.session.create({
+    const session = await this.prisma.client.session.create({
       data: {
         userId,
         tokenHash: hashToken(token),
@@ -216,6 +255,6 @@ export class AuthService {
         userAgent: meta.userAgent,
       },
     });
-    return { token, expiresAt };
+    return { id: session.id, token, expiresAt };
   }
 }

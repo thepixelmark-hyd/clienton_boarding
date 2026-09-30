@@ -1,7 +1,6 @@
-import request from "supertest";
 import type { INestApplication } from "@nestjs/common";
 import { createTestApp, getPrisma, truncateAll } from "./test-app";
-import { signupOrg } from "./helpers";
+import { api, signupOrg } from "./helpers";
 
 describe("Requirements engine (e2e)", () => {
   let app: INestApplication;
@@ -19,11 +18,11 @@ describe("Requirements engine (e2e)", () => {
   });
 
   async function setupProject(cookie: string) {
-    const client = await request(app.getHttpServer())
+    const client = await api(app)
       .post("/api/v1/clients")
       .set("Cookie", cookie)
       .send({ name: "Requirements Test Client" });
-    const project = await request(app.getHttpServer())
+    const project = await api(app)
       .post("/api/v1/projects")
       .set("Cookie", cookie)
       .send({ clientId: client.body.id, name: "Requirements Test Project" });
@@ -34,13 +33,13 @@ describe("Requirements engine (e2e)", () => {
     const { cookie } = await signupOrg(app, { email: "req1@requirements-test.example" });
     const projectId = await setupProject(cookie);
 
-    const res = await request(app.getHttpServer())
+    const res = await api(app)
       .post(`/api/v1/projects/${projectId}/requirements`)
       .set("Cookie", cookie)
       .send({ templateKey: "logo-design" });
     expect(res.status).toBe(201);
 
-    const submission = await request(app.getHttpServer())
+    const submission = await api(app)
       .get(`/api/v1/forms/${res.body.form.id}/submissions/${res.body.submission.id}`)
       .set("Cookie", cookie);
     expect(submission.body.form.fields).toHaveLength(19);
@@ -51,13 +50,13 @@ describe("Requirements engine (e2e)", () => {
     const { cookie } = await signupOrg(app, { email: "req2@requirements-test.example" });
     const projectId = await setupProject(cookie);
 
-    const instantiate = await request(app.getHttpServer())
+    const instantiate = await api(app)
       .post(`/api/v1/projects/${projectId}/requirements`)
       .set("Cookie", cookie)
       .send({ templateKey: "logo-design" });
     const { form, submission } = instantiate.body;
 
-    const fieldsRes = await request(app.getHttpServer())
+    const fieldsRes = await api(app)
       .get(`/api/v1/forms/${form.id}/submissions/${submission.id}`)
       .set("Cookie", cookie);
     const fieldByKey = (key: string) => fieldsRes.body.form.fields.find((f: { key: string }) => f.key === key);
@@ -79,12 +78,12 @@ describe("Requirements engine (e2e)", () => {
       value: key === "logoUsage" ? ["website"] : key === "brandAdjectives" ? ["modern", "bold", "friendly", "professional", "warm"] : `Answer for ${key}`,
     }));
 
-    await request(app.getHttpServer())
+    await api(app)
       .put(`/api/v1/forms/${form.id}/submissions/${submission.id}/responses`)
       .set("Cookie", cookie)
       .send({ responses });
 
-    const submitRes = await request(app.getHttpServer())
+    const submitRes = await api(app)
       .post(`/api/v1/forms/${form.id}/submissions/${submission.id}/submit`)
       .set("Cookie", cookie);
 
@@ -96,23 +95,23 @@ describe("Requirements engine (e2e)", () => {
     const { cookie } = await signupOrg(app, { email: "req3@requirements-test.example" });
     const projectId = await setupProject(cookie);
 
-    const instantiate = await request(app.getHttpServer())
+    const instantiate = await api(app)
       .post(`/api/v1/projects/${projectId}/requirements`)
       .set("Cookie", cookie)
       .send({ templateKey: "logo-design" });
     const { form, submission } = instantiate.body;
 
-    const fieldsRes = await request(app.getHttpServer())
+    const fieldsRes = await api(app)
       .get(`/api/v1/forms/${form.id}/submissions/${submission.id}`)
       .set("Cookie", cookie);
     const logoUsageField = fieldsRes.body.form.fields.find((f: { key: string }) => f.key === "logoUsage");
 
-    await request(app.getHttpServer())
+    await api(app)
       .put(`/api/v1/forms/${form.id}/submissions/${submission.id}/responses`)
       .set("Cookie", cookie)
       .send({ responses: [{ fieldId: logoUsageField.id, value: ["packaging"] }] });
 
-    const submitRes = await request(app.getHttpServer())
+    const submitRes = await api(app)
       .post(`/api/v1/forms/${form.id}/submissions/${submission.id}/submit`)
       .set("Cookie", cookie);
 
@@ -126,27 +125,27 @@ describe("Requirements engine (e2e)", () => {
     const { cookie } = await signupOrg(app, { email: "req4@requirements-test.example" });
     const projectId = await setupProject(cookie);
 
-    const instantiate = await request(app.getHttpServer())
+    const instantiate = await api(app)
       .post(`/api/v1/projects/${projectId}/requirements`)
       .set("Cookie", cookie)
       .send({ templateKey: "logo-design" });
     const { form, submission } = instantiate.body;
 
-    const fieldsRes = await request(app.getHttpServer())
+    const fieldsRes = await api(app)
       .get(`/api/v1/forms/${form.id}/submissions/${submission.id}`)
       .set("Cookie", cookie);
     const businessNameField = fieldsRes.body.form.fields.find((f: { key: string }) => f.key === "businessName");
 
-    await request(app.getHttpServer())
+    await api(app)
       .put(`/api/v1/forms/${form.id}/submissions/${submission.id}/responses`)
       .set("Cookie", cookie)
       .send({ responses: [{ fieldId: businessNameField.id, value: "Original Client Answer" }] });
 
-    const submitRes = await request(app.getHttpServer())
+    const submitRes = await api(app)
       .post(`/api/v1/forms/${form.id}/submissions/${submission.id}/submit`)
       .set("Cookie", cookie);
 
-    const requirementRes = await request(app.getHttpServer())
+    const requirementRes = await api(app)
       .get(`/api/v1/requirements/${submitRes.body.id}`)
       .set("Cookie", cookie);
 
@@ -160,22 +159,22 @@ describe("Requirements engine (e2e)", () => {
     const { cookie } = await signupOrg(app, { email: "req5@requirements-test.example" });
     const projectId = await setupProject(cookie);
 
-    const instantiate = await request(app.getHttpServer())
+    const instantiate = await api(app)
       .post(`/api/v1/projects/${projectId}/requirements`)
       .set("Cookie", cookie)
       .send({ templateKey: "website-discovery" });
     const { form, submission } = instantiate.body;
 
-    await request(app.getHttpServer())
+    await api(app)
       .post(`/api/v1/forms/${form.id}/submissions/${submission.id}/submit`)
       .set("Cookie", cookie);
 
-    const fieldsRes = await request(app.getHttpServer())
+    const fieldsRes = await api(app)
       .get(`/api/v1/forms/${form.id}/submissions/${submission.id}`)
       .set("Cookie", cookie);
     const anyField = fieldsRes.body.form.fields[0];
 
-    const lateEdit = await request(app.getHttpServer())
+    const lateEdit = await api(app)
       .put(`/api/v1/forms/${form.id}/submissions/${submission.id}/responses`)
       .set("Cookie", cookie)
       .send({ responses: [{ fieldId: anyField.id, value: "too late" }] });

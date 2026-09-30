@@ -1,7 +1,6 @@
-import request from "supertest";
 import type { INestApplication } from "@nestjs/common";
 import { createTestApp, getPrisma, truncateAll } from "./test-app";
-import { sessionCookie, signupOrg } from "./helpers";
+import { api, sessionCookie, signupOrg } from "./helpers";
 
 describe("Auth (e2e)", () => {
   let app: INestApplication;
@@ -34,7 +33,7 @@ describe("Auth (e2e)", () => {
 
   it("rejects signup with a duplicate email", async () => {
     await signupOrg(app, { email: "dupe@signup-test.example" });
-    const res = await request(app.getHttpServer()).post("/api/v1/auth/signup").send({
+    const res = await api(app).post("/api/v1/auth/signup").send({
       organizationName: "Second Org",
       fullName: "Second Owner",
       email: "dupe@signup-test.example",
@@ -45,7 +44,7 @@ describe("Auth (e2e)", () => {
   });
 
   it("rejects a weak password with a validation error, not a 500", async () => {
-    const res = await request(app.getHttpServer()).post("/api/v1/auth/signup").send({
+    const res = await api(app).post("/api/v1/auth/signup").send({
       organizationName: "Weak Password Co",
       fullName: "Test User",
       email: "weakpass@signup-test.example",
@@ -58,18 +57,18 @@ describe("Auth (e2e)", () => {
   it("logs in with correct credentials and rejects incorrect ones identically (no user enumeration)", async () => {
     const { body } = await signupOrg(app, { email: "login@signup-test.example", password: "CorrectHorse123" });
 
-    const good = await request(app.getHttpServer())
+    const good = await api(app)
       .post("/api/v1/auth/login")
       .send({ email: body.email, password: "CorrectHorse123" });
     expect(good.status).toBe(200);
 
-    const badPassword = await request(app.getHttpServer())
+    const badPassword = await api(app)
       .post("/api/v1/auth/login")
       .send({ email: body.email, password: "WrongPassword123" });
     expect(badPassword.status).toBe(401);
     expect(badPassword.body.code).toBe("INVALID_CREDENTIALS");
 
-    const badEmail = await request(app.getHttpServer())
+    const badEmail = await api(app)
       .post("/api/v1/auth/login")
       .send({ email: "nobody@signup-test.example", password: "WrongPassword123" });
     expect(badEmail.status).toBe(401);
@@ -77,13 +76,13 @@ describe("Auth (e2e)", () => {
   });
 
   it("rejects requests with no session cookie", async () => {
-    const res = await request(app.getHttpServer()).get("/api/v1/clients");
+    const res = await api(app).get("/api/v1/clients");
     expect(res.status).toBe(401);
     expect(res.body.code).toBe("UNAUTHENTICATED");
   });
 
   it("rejects requests with a garbage/unknown session cookie", async () => {
-    const res = await request(app.getHttpServer())
+    const res = await api(app)
       .get("/api/v1/clients")
       .set("Cookie", "clientos_session=not-a-real-token-at-all");
     expect(res.status).toBe(401);
@@ -92,20 +91,20 @@ describe("Auth (e2e)", () => {
   it("logout revokes the session so it can no longer be used", async () => {
     const { cookie } = await signupOrg(app, { email: "logout@signup-test.example" });
 
-    const beforeLogout = await request(app.getHttpServer()).get("/api/v1/auth/me").set("Cookie", cookie);
+    const beforeLogout = await api(app).get("/api/v1/auth/me").set("Cookie", cookie);
     expect(beforeLogout.status).toBe(200);
 
-    const logoutRes = await request(app.getHttpServer()).post("/api/v1/auth/logout").set("Cookie", cookie);
+    const logoutRes = await api(app).post("/api/v1/auth/logout").set("Cookie", cookie);
     expect(logoutRes.status).toBe(200);
 
-    const afterLogout = await request(app.getHttpServer()).get("/api/v1/auth/me").set("Cookie", cookie);
+    const afterLogout = await api(app).get("/api/v1/auth/me").set("Cookie", cookie);
     expect(afterLogout.status).toBe(401);
   });
 
   it("invites a member with a role and lets them accept and log in with that role", async () => {
     const { cookie } = await signupOrg(app, { email: "inviter@signup-test.example" });
 
-    const invite = await request(app.getHttpServer())
+    const invite = await api(app)
       .post("/api/v1/auth/invitations")
       .set("Cookie", cookie)
       .send({ email: "invitee@signup-test.example", role: "PROJECT_MANAGER" });
@@ -113,12 +112,12 @@ describe("Auth (e2e)", () => {
     const token = invite.body.devToken;
     expect(token).toBeDefined();
 
-    const accept = await request(app.getHttpServer())
+    const accept = await api(app)
       .post(`/api/v1/auth/invitations/${token}/accept`)
       .send({ fullName: "Invited PM", password: "InviteeSecret123" });
     expect(accept.status).toBe(201);
 
-    const meRes = await request(app.getHttpServer())
+    const meRes = await api(app)
       .get("/api/v1/auth/me")
       .set("Cookie", sessionCookie(accept));
     expect(meRes.body.memberships[0].role).toBe("PROJECT_MANAGER");
@@ -126,17 +125,17 @@ describe("Auth (e2e)", () => {
 
   it("rejects an invitation token that has already been used", async () => {
     const { cookie } = await signupOrg(app, { email: "inviter2@signup-test.example" });
-    const invite = await request(app.getHttpServer())
+    const invite = await api(app)
       .post("/api/v1/auth/invitations")
       .set("Cookie", cookie)
       .send({ email: "invitee2@signup-test.example", role: "EMPLOYEE" });
     const token = invite.body.devToken;
 
-    await request(app.getHttpServer())
+    await api(app)
       .post(`/api/v1/auth/invitations/${token}/accept`)
       .send({ fullName: "First Accept", password: "InviteeSecret123" });
 
-    const second = await request(app.getHttpServer())
+    const second = await api(app)
       .post(`/api/v1/auth/invitations/${token}/accept`)
       .send({ fullName: "Second Accept", password: "InviteeSecret123" });
     expect(second.status).toBe(400);

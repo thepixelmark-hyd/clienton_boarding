@@ -1,7 +1,6 @@
-import request from "supertest";
 import type { INestApplication } from "@nestjs/common";
 import { createTestApp, getPrisma, truncateAll } from "./test-app";
-import { sessionCookie, signupOrg } from "./helpers";
+import { api, sessionCookie, signupOrg } from "./helpers";
 
 /**
  * These tests exist specifically to verify the claims in
@@ -28,13 +27,13 @@ describe("Tenant isolation and RBAC (e2e)", () => {
     const orgA = await signupOrg(app, { email: "a-owner@tenancy-test.example" });
     const orgB = await signupOrg(app, { email: "b-owner@tenancy-test.example" });
 
-    const clientInB = await request(app.getHttpServer())
+    const clientInB = await api(app)
       .post("/api/v1/clients")
       .set("Cookie", orgB.cookie)
       .send({ name: "Org B's Client" });
     expect(clientInB.status).toBe(201);
 
-    const crossTenantRead = await request(app.getHttpServer())
+    const crossTenantRead = await api(app)
       .get(`/api/v1/clients/${clientInB.body.id}`)
       .set("Cookie", orgA.cookie);
     expect(crossTenantRead.status).toBe(404);
@@ -44,23 +43,23 @@ describe("Tenant isolation and RBAC (e2e)", () => {
     const orgA = await signupOrg(app, { email: "a-owner2@tenancy-test.example" });
     const orgB = await signupOrg(app, { email: "b-owner2@tenancy-test.example" });
 
-    const clientInB = await request(app.getHttpServer())
+    const clientInB = await api(app)
       .post("/api/v1/clients")
       .set("Cookie", orgB.cookie)
       .send({ name: "Org B Client" });
-    const projectInB = await request(app.getHttpServer())
+    const projectInB = await api(app)
       .post("/api/v1/projects")
       .set("Cookie", orgB.cookie)
       .send({ clientId: clientInB.body.id, name: "Org B Project" });
 
-    const crossTenantWrite = await request(app.getHttpServer())
+    const crossTenantWrite = await api(app)
       .patch(`/api/v1/projects/${projectInB.body.id}`)
       .set("Cookie", orgA.cookie)
       .send({ name: "Hijacked", version: 1 });
     expect(crossTenantWrite.status).toBe(404);
 
     // Confirm it was NOT renamed.
-    const stillIntact = await request(app.getHttpServer())
+    const stillIntact = await api(app)
       .get(`/api/v1/projects/${projectInB.body.id}`)
       .set("Cookie", orgB.cookie);
     expect(stillIntact.body.name).toBe("Org B Project");
@@ -70,16 +69,16 @@ describe("Tenant isolation and RBAC (e2e)", () => {
     const orgA = await signupOrg(app, { email: "a-owner3@tenancy-test.example" });
     const orgB = await signupOrg(app, { email: "b-owner3@tenancy-test.example" });
 
-    await request(app.getHttpServer())
+    await api(app)
       .post("/api/v1/clients")
       .set("Cookie", orgA.cookie)
       .send({ name: "Visible To A" });
-    await request(app.getHttpServer())
+    await api(app)
       .post("/api/v1/clients")
       .set("Cookie", orgB.cookie)
       .send({ name: "Should Not Leak To A" });
 
-    const listAsA = await request(app.getHttpServer()).get("/api/v1/clients").set("Cookie", orgA.cookie);
+    const listAsA = await api(app).get("/api/v1/clients").set("Cookie", orgA.cookie);
     const names = listAsA.body.data.map((c: { name: string }) => c.name);
     expect(names).toContain("Visible To A");
     expect(names).not.toContain("Should Not Leak To A");
@@ -87,43 +86,43 @@ describe("Tenant isolation and RBAC (e2e)", () => {
 
   it("denies a VIEWER from creating a client (403) but allows reading", async () => {
     const owner = await signupOrg(app, { email: "owner-viewer-test@tenancy-test.example" });
-    const invite = await request(app.getHttpServer())
+    const invite = await api(app)
       .post("/api/v1/auth/invitations")
       .set("Cookie", owner.cookie)
       .send({ email: "viewer@tenancy-test.example", role: "VIEWER" });
-    const accept = await request(app.getHttpServer())
+    const accept = await api(app)
       .post(`/api/v1/auth/invitations/${invite.body.devToken}/accept`)
       .send({ fullName: "Viewer Person", password: "ViewerSecret123" });
     const viewerCookie = sessionCookie(accept);
 
-    const createAttempt = await request(app.getHttpServer())
+    const createAttempt = await api(app)
       .post("/api/v1/clients")
       .set("Cookie", viewerCookie)
       .send({ name: "Should Be Blocked" });
     expect(createAttempt.status).toBe(403);
     expect(createAttempt.body.code).toBe("FORBIDDEN");
 
-    const readAttempt = await request(app.getHttpServer()).get("/api/v1/clients").set("Cookie", viewerCookie);
+    const readAttempt = await api(app).get("/api/v1/clients").set("Cookie", viewerCookie);
     expect(readAttempt.status).toBe(200);
   });
 
   it("denies a CONTRACTOR from deleting a client", async () => {
     const owner = await signupOrg(app, { email: "owner-contractor-test@tenancy-test.example" });
-    const client = await request(app.getHttpServer())
+    const client = await api(app)
       .post("/api/v1/clients")
       .set("Cookie", owner.cookie)
       .send({ name: "Contractor Target" });
 
-    const invite = await request(app.getHttpServer())
+    const invite = await api(app)
       .post("/api/v1/auth/invitations")
       .set("Cookie", owner.cookie)
       .send({ email: "contractor@tenancy-test.example", role: "CONTRACTOR" });
-    const accept = await request(app.getHttpServer())
+    const accept = await api(app)
       .post(`/api/v1/auth/invitations/${invite.body.devToken}/accept`)
       .send({ fullName: "Contractor Person", password: "ContractorSecret123" });
     const contractorCookie = sessionCookie(accept);
 
-    const deleteAttempt = await request(app.getHttpServer())
+    const deleteAttempt = await api(app)
       .delete(`/api/v1/clients/${client.body.id}`)
       .set("Cookie", contractorCookie);
     expect(deleteAttempt.status).toBe(403);

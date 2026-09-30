@@ -2,14 +2,24 @@
 
 Base path: `/api/v1`. OpenAPI/Swagger UI served at `/api/docs` (non-production).
 
+"session" auth below accepts either transport: the `httpOnly` cookie the web
+app receives on signup/login, or `Authorization: Bearer <token>` (the same
+`session.token` value, used by the Android app) — see `security.md`. Every
+cookie-authenticated `POST`/`PUT`/`PATCH`/`DELETE` must also carry
+`X-Requested-With: XMLHttpRequest` or it is rejected as a CSRF precaution;
+bearer-authenticated requests are exempt. `/auth/login` and `/auth/signup`
+are rate-limited (20 requests/60s per client); every other endpoint shares a
+separate, more permissive global limit (300/60s).
+
 ## Auth
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| POST | /auth/signup | none | Creates Organization + owner User in one transaction |
-| POST | /auth/login | none | Email+password → session cookie |
+| POST | /auth/signup | none (rate-limited) | Creates Organization + owner User in one transaction; returns `session.token` for mobile clients alongside the cookie |
+| POST | /auth/login | none (rate-limited) | Email+password → session cookie + `session.token` |
 | POST | /auth/logout | session | Revokes current session |
-| GET | /auth/me | session | Current user + active org + role |
+| POST | /auth/logout-all | session | Revokes every session for the current user |
+| GET | /auth/me | session | Current user + org memberships |
 | POST | /invitations | session (Admin+) | Invite a user to the org by email+role |
 | POST | /invitations/:token/accept | none | Accept invite, set password |
 

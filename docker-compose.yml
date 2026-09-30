@@ -1,0 +1,60 @@
+# Runs ClientOS as it would in production: built images talking to a real
+# Postgres instance over the network, nothing bind-mounted from source. For
+# day-to-day development, run Postgres from here but the app itself with
+# `pnpm dev:web` / `pnpm dev:api` instead — rebuilding an image on every file
+# save is not a workflow anyone wants.
+#
+# This does not run migrations for you. Before the api container will serve
+# anything but connection errors, apply the schema once against this
+# Postgres (from the host, with packages/database's DATABASE_URL pointed at
+# localhost:5432 as above):
+#   pnpm --filter @clientos/database migrate:deploy
+name: clientos
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: clientos
+      POSTGRES_PASSWORD: clientos_dev_password
+      POSTGRES_DB: clientos_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - clientos_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U clientos -d clientos_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      DATABASE_URL: "postgresql://clientos:clientos_dev_password@postgres:5432/clientos_dev?schema=public"
+      SESSION_SECRET: "replace-with-a-long-random-value-in-every-environment"
+      SESSION_COOKIE_NAME: "clientos_session"
+      WEB_APP_URL: "http://localhost:3000"
+      NODE_ENV: "production"
+      API_PORT: "4000"
+    ports:
+      - "4000:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: "http://localhost:4000/api/v1"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  clientos_postgres_data:

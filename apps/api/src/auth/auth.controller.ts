@@ -1,4 +1,5 @@
-import { Body, Controller, Get, HttpCode, Param, Post, Req, Res } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, Param, Post, Req, Res, UseGuards } from "@nestjs/common";
+import { Throttle, ThrottlerGuard } from "@nestjs/throttler";
 import type { Request, Response } from "express";
 import {
   acceptInvitationSchema,
@@ -34,6 +35,8 @@ export class AuthController {
 
   @Public()
   @Post("signup")
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   async signup(
     @Body(new ZodValidationPipe(signupSchema)) body: SignupInput,
     @Req() req: Request,
@@ -41,12 +44,14 @@ export class AuthController {
   ) {
     const { organization, user, session } = await this.authService.signup(body, requestMeta(req));
     this.setSessionCookie(res, session.token, session.expiresAt);
-    return { organization: sanitizeOrg(organization), user: sanitizeUser(user) };
+    return { organization: sanitizeOrg(organization), user: sanitizeUser(user), session: sanitizeSession(session) };
   }
 
   @Public()
   @Post("login")
   @HttpCode(200)
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   async login(
     @Body(new ZodValidationPipe(loginSchema)) body: LoginInput,
     @Req() req: Request,
@@ -54,7 +59,7 @@ export class AuthController {
   ) {
     const { user, session } = await this.authService.login(body, requestMeta(req));
     this.setSessionCookie(res, session.token, session.expiresAt);
-    return { user: sanitizeUser(user) };
+    return { user: sanitizeUser(user), session: sanitizeSession(session) };
   }
 
   @Post("logout")
@@ -117,7 +122,7 @@ export class AuthController {
       requestMeta(req),
     );
     this.setSessionCookie(res, session.token, session.expiresAt);
-    return { user: sanitizeUser(user) };
+    return { user: sanitizeUser(user), session: sanitizeSession(session) };
   }
 
   private setSessionCookie(res: Response, token: string, expiresAt: Date) {
@@ -135,4 +140,14 @@ function sanitizeUser(user: { id: string; email: string; fullName: string }) {
 }
 function sanitizeOrg(org: { id: string; name: string; slug: string }) {
   return { id: org.id, name: org.name, slug: org.slug };
+}
+// The web app authenticates via the httpOnly cookie set above and ignores
+// this field entirely. It exists for the Android client, which cannot use
+// a cookie jar the way its biometric-gated token storage expects — it reads
+// `session.token` here and sends it back as `Authorization: Bearer <token>`
+// on every subsequent request instead (see SessionAuthGuard, CsrfGuard, and
+// docs/architecture-assessment.md §4). Never includes the internal session
+// row id — only what a client legitimately needs to authenticate.
+function sanitizeSession(session: { token: string; expiresAt: Date }) {
+  return { token: session.token, expiresAt: session.expiresAt };
 }

@@ -6,21 +6,37 @@
   server hardware, never a fast hash like bcrypt-only-cost-10 or plain
   sha256).
 - Sessions are **server-side**, stored in the `Session` table, referenced by
-  an opaque random token in an `httpOnly`, `secure`, `sameSite=lax` cookie —
-  not a JWT in localStorage, so sessions can be enumerated and revoked
-  (§69), and XSS cannot exfiltrate a usable bearer token.
+  an opaque random token — not a JWT, so sessions can be enumerated and
+  revoked (§69), and XSS cannot forge a usable one out of thin air. Two
+  transports carry that same token, resolved by the same `SessionAuthGuard`
+  against the same `Session` row:
+  - **Web**: an `httpOnly`, `secure`, `sameSite=lax` cookie. The browser
+    never exposes it to JS, so XSS cannot exfiltrate it either.
+  - **Mobile (Android)**: `Authorization: Bearer <token>`, since a native
+    app has no cookie jar shared with a browser. The token is persisted in
+    Jetpack DataStore behind the app's biometric unlock gate (see
+    `mobile/app/src/main/kotlin/.../data/DataStoreTokenStore.kt` and
+    `BiometricAuthManager.kt`) — DataStore itself is sandboxed to the app
+    by the OS but not encrypted at rest; encrypting the stored value with
+    `androidx.security.crypto` (already a dependency) is the next hardening
+    step, called out rather than silently skipped.
+  `SessionAuthGuard.extractToken()` checks the `Authorization` header first
+  and falls back to the cookie, tagging the request with which one was used
+  (`request.authSource`) — this tag is what the CSRF guard below keys off.
 - Session tokens are hashed (SHA-256) before storage, same principle as
   password storage: a database read does not hand out live credentials.
-- **Correction (found during the architecture assessment, not yet
-  fixed):** login is **not currently rate-limited**. No throttling
-  package is installed and no attempt counter is kept anywhere. This
-  line previously claimed an in-memory limiter existed — it does not.
-  Brute-force login attempts are unmitigated beyond password strength
-  requirements. See `docs/architecture-assessment.md` §17/§21 (risk #2)
-  for the recommended fix (`@nestjs/throttler` on `/auth/login` and
-  `/auth/signup`).
+- **Login/signup are rate-limited**: `@nestjs/throttler`, scoped to just
+  those two routes (`POST /auth/login`, `POST /auth/signup`) rather than
+  globally, at 20 requests/60s per client — enough headroom for a person
+  mistyping a password, not enough for a credential-stuffing loop. A
+  separate, more permissive global default (300 req/60s) covers the rest of
+  the API against gross abuse without interfering with normal use. See
+  `apps/api/test/rate-limiting.e2e-spec.ts`.
 - `POST /auth/logout` deletes the session row; "log out of all devices"
-  deletes all sessions for the user.
+  deletes all sessions for the user. Both write an `AuditLog` entry
+  (`LOGIN_SUCCESS` / `LOGOUT`), alongside every failed login already having
+  nowhere to persist to (rate limiting above is the mitigation there, not an
+  audit trail of failures).
 - Org invitations use single-use, expiring (7 day) signed tokens; accepting
   one requires setting a password and does not itself grant access until the
   invite's target organization/role is applied server-side (the client
@@ -63,14 +79,19 @@
   storage, not just before render.
 - `helmet` middleware sets standard secure headers
   (HSTS, X-Content-Type-Options, frame-ancestors, etc).
-- **CSRF (correction — not yet enforced):** the web client sends a custom
-  `X-Requested-With: XMLHttpRequest` header on every request intending for
-  it to be a CSRF mitigation, but no guard or middleware in the API
-  actually validates that header today — a request missing it is still
-  processed. `sameSite=lax` alone provides partial protection (blocks
-  cross-site simple form-POST forgery in modern browsers) but the intended
-  second layer is not active. See `docs/architecture-assessment.md`
-  §17/§21 (risk #1) for the fix.
+- **CSRF**: `CsrfGuard` rejects any cookie-authenticated mutating request
+  (`POST`/`PUT`/`PATCH`/`DELETE`) that doesn't carry
+  `X-Requested-With: XMLHttpRequest`, which a cross-site form POST or
+  `<img>`/plain-form CSRF payload cannot attach — only same-origin
+  `fetch`/XHR code can set that header, and `apps/web/src/lib/api-client.ts`
+  does so on every request. The guard is scoped to `authSource === "cookie"`
+  specifically: a bearer-authenticated (mobile) request is exempt, since the
+  entire CSRF threat model is "a browser automatically attaches your
+  credentials to a request you didn't make" — a native app's Authorization
+  header is never attached automatically by anything, so there's nothing to
+  forge. `sameSite=lax` remains the first layer; this is the second. See
+  `apps/api/src/common/guards/csrf.guard.ts` and its spec for the exemption
+  cases (bearer, GET/HEAD, missing vs. wrong header).
 
 ## File security (architected; storage adapter not yet wired — see
 architecture.md "Known gaps")
@@ -93,10 +114,21 @@ architecture.md "Known gaps")
 ## Audit logging
 
 Every sensitive mutation (role change, permission change, deletion,
-requirement/scope change, approval decision, invitation) writes an
-`AuditLog` row with actor, timestamp, entity type/id, action, and a
+requirement/scope change, approval decision, invitation, login, logout)
+writes an `AuditLog` row with actor, timestamp, entity type/id, action, and a
 before/after value diff. This is append-only from the application's
 perspective — there is no update/delete endpoint for `AuditLog`.
+
+## Request tracing
+
+Every request is tagged with a correlation ID (`X-Correlation-Id`: echoed
+back if the caller supplied one, generated otherwise) by
+`CorrelationIdMiddleware`, threaded through `LoggingInterceptor`'s structured
+access log (`method path status durationMs correlationId org=...`) and into
+`HttpExceptionFilter`'s error responses. A support request that includes the
+correlation ID from a failed response can be matched to the exact server-side
+log line — including which org/user made it — without needing timestamps to
+line up by hand.
 
 ## What was verified this phase
 
@@ -108,13 +140,15 @@ perspective — there is no update/delete endpoint for `AuditLog`.
 - Manual review confirmed no endpoint accepts `organizationId` from the
   request body/query for authorization purposes.
 
-## Explicitly not yet implemented (see docs/architecture-assessment.md §17/§21)
+## Explicitly not yet implemented
 
-MFA/2FA, OAuth login, device/session management UI, application-level rate
-limiting (corrected above — not just WAF-style edge limiting, there is none
-at all yet), CSRF header enforcement (corrected above), object-level
-`ProjectMember` permission checks (corrected above), dependency/SAST
-scanning in CI (no CI exists yet), backup/restore runbook. These are called
-out here, with the three corrections dated to this architecture assessment,
-so they are not mistaken for oversights or, worse, for controls that are
-already protecting production.
+MFA/2FA, OAuth login, device/session management UI, object-level
+`ProjectMember` permission checks (tracked in
+`docs/architecture-assessment.md` §8/§21 risk #3 — Projects/CRM/Requirements
+were explicitly out of scope for this phase and were not touched),
+dependency/SAST scanning in CI (`.github/workflows/ci.yml` runs
+lint/typecheck/build/test, not a security scanner), encryption-at-rest for
+the Android token store (noted above), backup/restore runbook. Rate limiting
+and CSRF header enforcement — previously listed here as gaps found during
+the architecture assessment — are now implemented; see Authentication and
+Input validation above.

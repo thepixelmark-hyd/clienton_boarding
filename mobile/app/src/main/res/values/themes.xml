@@ -1,0 +1,6 @@
+<resources>
+    <!-- Compose owns all real theming (ui/theme/Theme.kt) — this XML theme
+         only sets the window-level attributes Android needs before Compose
+         takes over (no action bar; the app never uses one). -->
+    <style name="Theme.ClientOS" parent="android:Theme.DeviceDefault.DayNight.NoActionBar" />
+</resources>

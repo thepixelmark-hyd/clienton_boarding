@@ -9,14 +9,24 @@ import type { OrgRole } from "@clientos/shared";
 
 /**
  * Global guard (registered as APP_GUARD in app.module.ts). Resolves the
- * session cookie -> Session row -> User -> Membership on every request and
+ * session token -> Session row -> User -> Membership on every request and
  * attaches `request.tenant`. Route handlers must read organizationId/role
  * from `request.tenant` (via @CurrentTenant()), never from client input.
+ *
+ * Dual auth source: the browser web app authenticates via the httpOnly
+ * session cookie; the Android client (which cannot maintain a browser
+ * cookie jar the way biometric-gated token storage expects) authenticates
+ * via `Authorization: Bearer <token>` instead. Both paths resolve against
+ * the exact same `Session` table by the same `tokenHash` lookup — issuing
+ * a mobile-friendly token is not a second auth system, just a second place
+ * the same opaque token can travel (see docs/architecture-assessment.md §4).
+ * `request.authSource` records which one was used, because CsrfGuard's
+ * mitigation only makes sense for the cookie path (see csrf.guard.ts).
  *
  * Known simplification (documented, not accidental): a User's *first*
  * active Membership is used as their tenant context. Multi-organization
  * membership is supported in the data model, but an org-switcher UI is not
- * built this phase — see docs/architecture.md roadmap.
+ * built this phase — see docs/architecture-assessment.md §7 roadmap.
  */
 @Injectable()
 export class SessionAuthGuard implements CanActivate {
@@ -32,8 +42,7 @@ export class SessionAuthGuard implements CanActivate {
     ]);
 
     const request = context.switchToHttp().getRequest<Request>();
-    const cookieName = process.env.SESSION_COOKIE_NAME ?? "clientos_session";
-    const token: string | undefined = request.cookies?.[cookieName];
+    const { token, source } = this.extractToken(request);
 
     if (!token) {
       if (isPublic) return true;
@@ -64,6 +73,7 @@ export class SessionAuthGuard implements CanActivate {
     // resolved — logout and "who am I" need this regardless of membership.
     request.user = { id: session.user.id, email: session.user.email, fullName: session.user.fullName };
     request.sessionId = session.id;
+    request.authSource = source;
 
     const membership = session.user.memberships[0];
     if (!membership) {
@@ -81,5 +91,14 @@ export class SessionAuthGuard implements CanActivate {
     };
 
     return true;
+  }
+
+  private extractToken(request: Request): { token: string | undefined; source: "cookie" | "bearer" } {
+    const authHeader = request.headers.authorization;
+    if (authHeader?.startsWith("Bearer ")) {
+      return { token: authHeader.slice("Bearer ".length).trim(), source: "bearer" };
+    }
+    const cookieName = process.env.SESSION_COOKIE_NAME ?? "clientos_session";
+    return { token: request.cookies?.[cookieName], source: "cookie" };
   }
 }

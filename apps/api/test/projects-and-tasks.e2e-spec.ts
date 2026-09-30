@@ -1,7 +1,6 @@
-import request from "supertest";
 import type { INestApplication } from "@nestjs/common";
 import { createTestApp, getPrisma, truncateAll } from "./test-app";
-import { signupOrg } from "./helpers";
+import { api, signupOrg } from "./helpers";
 
 describe("Projects and tasks (e2e)", () => {
   let app: INestApplication;
@@ -19,11 +18,11 @@ describe("Projects and tasks (e2e)", () => {
   });
 
   async function setupProject(cookie: string) {
-    const client = await request(app.getHttpServer())
+    const client = await api(app)
       .post("/api/v1/clients")
       .set("Cookie", cookie)
       .send({ name: "Health Test Client" });
-    const project = await request(app.getHttpServer())
+    const project = await api(app)
       .post("/api/v1/projects")
       .set("Cookie", cookie)
       .send({ clientId: client.body.id, name: "Health Test Project" });
@@ -34,7 +33,7 @@ describe("Projects and tasks (e2e)", () => {
     const { cookie } = await signupOrg(app, { email: "health1@projects-test.example" });
     const projectId = await setupProject(cookie);
 
-    const res = await request(app.getHttpServer()).get(`/api/v1/projects/${projectId}`).set("Cookie", cookie);
+    const res = await api(app).get(`/api/v1/projects/${projectId}`).set("Cookie", cookie);
     expect(res.body.health.status).toBe("HEALTHY");
   });
 
@@ -42,12 +41,12 @@ describe("Projects and tasks (e2e)", () => {
     const { cookie } = await signupOrg(app, { email: "health2@projects-test.example" });
     const projectId = await setupProject(cookie);
 
-    await request(app.getHttpServer())
+    await api(app)
       .post(`/api/v1/projects/${projectId}/tasks`)
       .set("Cookie", cookie)
       .send({ title: "Overdue task", dueDate: new Date(Date.now() - 86_400_000).toISOString() });
 
-    const res = await request(app.getHttpServer()).get(`/api/v1/projects/${projectId}`).set("Cookie", cookie);
+    const res = await api(app).get(`/api/v1/projects/${projectId}`).set("Cookie", cookie);
     expect(res.body.health.status).toBe("WATCH");
     expect(res.body.health.reason).toMatch(/overdue/i);
   });
@@ -56,12 +55,12 @@ describe("Projects and tasks (e2e)", () => {
     const { cookie } = await signupOrg(app, { email: "concurrency@projects-test.example" });
     const projectId = await setupProject(cookie);
 
-    const task = await request(app.getHttpServer())
+    const task = await api(app)
       .post(`/api/v1/projects/${projectId}/tasks`)
       .set("Cookie", cookie)
       .send({ title: "Race condition target" });
 
-    const firstUpdate = await request(app.getHttpServer())
+    const firstUpdate = await api(app)
       .patch(`/api/v1/tasks/${task.body.id}`)
       .set("Cookie", cookie)
       .send({ status: "IN_PROGRESS", version: 1 });
@@ -69,7 +68,7 @@ describe("Projects and tasks (e2e)", () => {
     expect(firstUpdate.body.version).toBe(2);
 
     // Someone else's stale read still thinks version is 1.
-    const staleUpdate = await request(app.getHttpServer())
+    const staleUpdate = await api(app)
       .patch(`/api/v1/tasks/${task.body.id}`)
       .set("Cookie", cookie)
       .send({ status: "DONE", version: 1 });
@@ -81,17 +80,17 @@ describe("Projects and tasks (e2e)", () => {
     const { cookie } = await signupOrg(app, { email: "cycle@projects-test.example" });
     const projectId = await setupProject(cookie);
 
-    const taskA = await request(app.getHttpServer())
+    const taskA = await api(app)
       .post(`/api/v1/projects/${projectId}/tasks`)
       .set("Cookie", cookie)
       .send({ title: "Task A" });
-    const taskB = await request(app.getHttpServer())
+    const taskB = await api(app)
       .post(`/api/v1/projects/${projectId}/tasks`)
       .set("Cookie", cookie)
       .send({ title: "Task B", dependsOnTaskIds: [taskA.body.id] }); // B depends on A
 
     // Now try to make A depend on B — a direct cycle (A -> B -> A).
-    const cyclic = await request(app.getHttpServer())
+    const cyclic = await api(app)
       .patch(`/api/v1/tasks/${taskA.body.id}`)
       .set("Cookie", cookie)
       .send({ dependsOnTaskIds: [taskB.body.id], version: 1 });
@@ -103,12 +102,12 @@ describe("Projects and tasks (e2e)", () => {
     const { cookie } = await signupOrg(app, { email: "selfdep@projects-test.example" });
     const projectId = await setupProject(cookie);
 
-    const task = await request(app.getHttpServer())
+    const task = await api(app)
       .post(`/api/v1/projects/${projectId}/tasks`)
       .set("Cookie", cookie)
       .send({ title: "Self referencing" });
 
-    const res = await request(app.getHttpServer())
+    const res = await api(app)
       .patch(`/api/v1/tasks/${task.body.id}`)
       .set("Cookie", cookie)
       .send({ dependsOnTaskIds: [task.body.id], version: 1 });

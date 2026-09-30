@@ -1,0 +1,17 @@
+# Gradle
+.gradle/
+build/
+*/build/
+
+# Local config that varies per machine, never shared
+local.properties
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+.DS_Store
+
+# Instrumented test / lint artifacts
+captures/
+.externalNativeBuild/
+.cxx/

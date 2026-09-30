@@ -5,6 +5,7 @@
   "engines": {
     "node": ">=20"
   },
+  "packageManager": "pnpm@12.8.1",
   "scripts": {
     "dev:web": "pnpm --filter @clientos/web dev",
     "dev:api": "pnpm --filter @clientos/api start:dev",
@@ -14,6 +15,7 @@
     "test": "pnpm -r test",
     "db:generate": "pnpm --filter @clientos/database generate",
     "db:migrate": "pnpm --filter @clientos/database migrate",
+    "db:migrate:deploy": "pnpm --filter @clientos/database migrate:deploy",
     "db:seed": "pnpm --filter @clientos/database seed"
   },
   "devDependencies": {
