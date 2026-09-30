@@ -1,0 +1,89 @@
+/**
+ * Semantic design tokens (docs/design-system.md). Values are HSL channels
+ * (no `hsl()` wrapper) so Tailwind can apply opacity modifiers via
+ * `hsl(var(--token) / <alpha-value>)` in tailwind.config.ts.
+ *
+ * Light mode is a warm, slightly off-white neutral — not stark white — and
+ * dark mode is authored with its own values throughout, not a mechanical
+ * invert of light mode.
+ */
+
+:root {
+  --background: 40 14% 98%;
+  --surface: 0 0% 100%;
+  --surface-secondary: 40 12% 95%;
+  --border: 40 10% 88%;
+  --border-strong: 30 8% 76%;
+
+  --text-primary: 220 20% 12%;
+  --text-secondary: 220 10% 36%;
+  --text-muted: 220 8% 55%;
+
+  --accent: 221 63% 33%;
+  --accent-foreground: 0 0% 100%;
+
+  --success: 142 55% 30%;
+  --success-foreground: 0 0% 100%;
+  --warning: 34 90% 40%;
+  --warning-foreground: 0 0% 100%;
+  --danger: 4 68% 45%;
+  --danger-foreground: 0 0% 100%;
+  --info: 199 65% 38%;
+  --info-foreground: 0 0% 100%;
+
+  --focus-ring: 221 83% 53%;
+}
+
+:root[data-theme="dark"] {
+  --background: 222 22% 8%;
+  --surface: 222 18% 12%;
+  --surface-secondary: 222 15% 16%;
+  --border: 222 12% 22%;
+  --border-strong: 222 10% 30%;
+
+  --text-primary: 210 25% 96%;
+  --text-secondary: 210 12% 74%;
+  --text-muted: 212 8% 54%;
+
+  --accent: 217 85% 68%;
+  --accent-foreground: 222 30% 10%;
+
+  --success: 142 45% 52%;
+  --success-foreground: 222 30% 8%;
+  --warning: 38 85% 58%;
+  --warning-foreground: 222 30% 8%;
+  --danger: 4 72% 62%;
+  --danger-foreground: 222 30% 8%;
+  --info: 199 70% 60%;
+  --info-foreground: 222 30% 8%;
+
+  --focus-ring: 217 85% 68%;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --background: 222 22% 8%;
+    --surface: 222 18% 12%;
+    --surface-secondary: 222 15% 16%;
+    --border: 222 12% 22%;
+    --border-strong: 222 10% 30%;
+
+    --text-primary: 210 25% 96%;
+    --text-secondary: 210 12% 74%;
+    --text-muted: 212 8% 54%;
+
+    --accent: 217 85% 68%;
+    --accent-foreground: 222 30% 10%;
+
+    --success: 142 45% 52%;
+    --success-foreground: 222 30% 8%;
+    --warning: 38 85% 58%;
+    --warning-foreground: 222 30% 8%;
+    --danger: 4 72% 62%;
+    --danger-foreground: 222 30% 8%;
+    --info: 199 70% 60%;
+    --info-foreground: 222 30% 8%;
+
+    --focus-ring: 217 85% 68%;
+  }
+}

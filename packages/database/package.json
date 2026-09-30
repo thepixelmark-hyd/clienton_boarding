@@ -1,0 +1,31 @@
+{
+  "name": "@clientos/database",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "generate": "prisma generate",
+    "migrate": "prisma migrate dev",
+    "migrate:deploy": "prisma migrate deploy",
+    "migrate:reset:test": "dotenv -e .env.test -- prisma migrate reset --force --skip-seed",
+    "seed": "tsx prisma/seed.ts",
+    "studio": "prisma studio",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo 'no-op'",
+    "test": "echo 'no-op'",
+    "build": "prisma generate && tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@prisma/client": "5.20.0"
+  },
+  "devDependencies": {
+    "prisma": "5.20.0",
+    "tsx": "4.19.1",
+    "dotenv-cli": "7.4.2",
+    "typescript": "5.6.3",
+    "@types/node": "22.7.4",
+    "argon2": "0.41.1",
+    "@clientos/shared": "workspace:*"
+  }
+}
