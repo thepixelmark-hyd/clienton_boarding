@@ -11,8 +11,14 @@
   (§69), and XSS cannot exfiltrate a usable bearer token.
 - Session tokens are hashed (SHA-256) before storage, same principle as
   password storage: a database read does not hand out live credentials.
-- Login is rate-limited per IP+email (in-memory limiter this phase;
-  Redis-backed in production) to blunt credential stuffing.
+- **Correction (found during the architecture assessment, not yet
+  fixed):** login is **not currently rate-limited**. No throttling
+  package is installed and no attempt counter is kept anywhere. This
+  line previously claimed an in-memory limiter existed — it does not.
+  Brute-force login attempts are unmitigated beyond password strength
+  requirements. See `docs/architecture-assessment.md` §17/§21 (risk #2)
+  for the recommended fix (`@nestjs/throttler` on `/auth/login` and
+  `/auth/signup`).
 - `POST /auth/logout` deletes the session row; "log out of all devices"
   deletes all sessions for the user.
 - Org invitations use single-use, expiring (7 day) signed tokens; accepting
@@ -26,11 +32,16 @@
   ACCOUNT_MANAGER | TEAM_LEAD | EMPLOYEE | CONTRACTOR | FINANCE | VIEWER` at
   the organization level; `CLIENT_ADMIN | CLIENT_MANAGER | STAKEHOLDER |
   APPROVER | VIEWER | BILLING_CONTACT` at the client-portal level. Full
-  permission matrix lives in `apps/api/src/auth/permissions.ts` as data (not
-  scattered `if` statements), so it's auditable in one place.
-- **Object-level**: project visibility additionally checks `ProjectMember`
-  for roles below Admin/Owner — an Employee not assigned to a project cannot
-  read it even though they're in the org.
+  permission matrix lives in `packages/shared/src/roles.ts` as data (not
+  scattered `if` statements), so it's auditable in one place, and is checked
+  by `apps/api/src/common/guards/permissions.guard.ts`.
+- **Object-level (correction — not yet implemented):** this doc previously
+  claimed project visibility checks `ProjectMember` for roles below
+  Admin/Owner. It does not — `ProjectMember` rows exist in the schema but
+  nothing currently reads them for authorization, so any org member with
+  sufficient org-level role can read any project regardless of project
+  assignment. See `docs/architecture-assessment.md` §8/§21 (risk #3) for
+  the fix, prioritized ahead of calling the Projects phase complete.
 - **Tenant isolation**: see `architecture.md` — enforced at guard + query
   layer, verified by integration tests that attempt cross-tenant reads.
 - Every guard decision that denies access returns `404` for existence-hiding
@@ -52,9 +63,14 @@
   storage, not just before render.
 - `helmet` middleware sets standard secure headers
   (HSTS, X-Content-Type-Options, frame-ancestors, etc).
-- CSRF: since auth is cookie-based, state-changing requests require a
-  custom `X-Requested-With` header (checked server-side) in addition to
-  `sameSite=lax`, which blocks the common CSRF vectors for cookie auth.
+- **CSRF (correction — not yet enforced):** the web client sends a custom
+  `X-Requested-With: XMLHttpRequest` header on every request intending for
+  it to be a CSRF mitigation, but no guard or middleware in the API
+  actually validates that header today — a request missing it is still
+  processed. `sameSite=lax` alone provides partial protection (blocks
+  cross-site simple form-POST forgery in modern browsers) but the intended
+  second layer is not active. See `docs/architecture-assessment.md`
+  §17/§21 (risk #1) for the fix.
 
 ## File security (architected; storage adapter not yet wired — see
 architecture.md "Known gaps")
@@ -92,9 +108,13 @@ perspective — there is no update/delete endpoint for `AuditLog`.
 - Manual review confirmed no endpoint accepts `organizationId` from the
   request body/query for authorization purposes.
 
-## Explicitly not yet implemented (see architecture.md roadmap)
+## Explicitly not yet implemented (see docs/architecture-assessment.md §17/§21)
 
-MFA/2FA, OAuth login, device/session management UI, WAF-style rate limiting
-at the edge, dependency/SAST scanning in CI, backup/restore runbook. These
-are Phase 9 (final security hardening) items and are called out here so they
-are not mistaken for oversights.
+MFA/2FA, OAuth login, device/session management UI, application-level rate
+limiting (corrected above — not just WAF-style edge limiting, there is none
+at all yet), CSRF header enforcement (corrected above), object-level
+`ProjectMember` permission checks (corrected above), dependency/SAST
+scanning in CI (no CI exists yet), backup/restore runbook. These are called
+out here, with the three corrections dated to this architecture assessment,
+so they are not mistaken for oversights or, worse, for controls that are
+already protecting production.
