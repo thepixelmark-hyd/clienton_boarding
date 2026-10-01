@@ -35,6 +35,12 @@ coverage/
 playwright-report/
 test-results/
 
+
+# Local-disk file storage (LocalDiskStorageProvider dev default — see
+# apps/api/src/storage). Never committed: it's runtime-generated uploads,
+# the same reasoning as not committing database contents.
+apps/api/.data/
+
 # Prisma
 packages/database/generated/
 

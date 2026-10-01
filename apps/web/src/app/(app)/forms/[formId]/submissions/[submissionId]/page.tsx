@@ -4,14 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { isFieldVisible, computeReadiness } from "@clientos/shared";
 import { useSubmission, useSaveResponses, useSubmitForm, type FormFieldItem } from "@/lib/forms";
+import { FormFieldControl } from "@/components/forms/field-control";
 import { PageHeader } from "@/components/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/ui/empty-state";
-import { Field } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/components/ui/toast";
@@ -121,6 +117,8 @@ export default function FormSubmissionPage() {
             disabled={alreadySubmitted}
             saving={savingFieldKey === field.key}
             onCommit={(value) => commitField(field, value)}
+            formId={params.formId}
+            submissionId={params.submissionId}
           />
         ))}
       </div>
@@ -134,116 +132,4 @@ export default function FormSubmissionPage() {
       )}
     </div>
   );
-}
-
-function FormFieldControl({
-  field,
-  value,
-  disabled,
-  saving,
-  onCommit,
-}: {
-  field: FormFieldItem;
-  value: unknown;
-  disabled?: boolean;
-  saving?: boolean;
-  onCommit: (value: unknown) => void;
-}) {
-  const [localText, setLocalText] = useState(typeof value === "string" ? value : "");
-
-  useEffect(() => {
-    setLocalText(typeof value === "string" ? value : "");
-  }, [value]);
-
-  const help = saving ? "Saving…" : field.helpText ?? undefined;
-
-  switch (field.type) {
-    case "SHORT_TEXT":
-    case "URL":
-      return (
-        <Field label={field.label} htmlFor={field.id} required={field.required} help={help}>
-          <Input
-            id={field.id}
-            value={localText}
-            disabled={disabled}
-            onChange={(e) => setLocalText(e.target.value)}
-            onBlur={() => onCommit(localText)}
-          />
-        </Field>
-      );
-    case "NUMBER":
-      return (
-        <Field label={field.label} htmlFor={field.id} required={field.required} help={help}>
-          <Input
-            id={field.id}
-            type="number"
-            value={localText}
-            disabled={disabled}
-            onChange={(e) => setLocalText(e.target.value)}
-            onBlur={() => onCommit(localText === "" ? undefined : Number(localText))}
-          />
-        </Field>
-      );
-    case "LONG_TEXT":
-    case "RICH_TEXT":
-      return (
-        <Field label={field.label} htmlFor={field.id} required={field.required} help={help}>
-          <Textarea
-            id={field.id}
-            value={localText}
-            disabled={disabled}
-            onChange={(e) => setLocalText(e.target.value)}
-            onBlur={() => onCommit(localText)}
-          />
-        </Field>
-      );
-    case "SINGLE_SELECT":
-      return (
-        <Field label={field.label} htmlFor={field.id} required={field.required} help={help}>
-          <Select value={typeof value === "string" ? value : undefined} onValueChange={(v) => onCommit(v)} disabled={disabled}>
-            <SelectTrigger id={field.id}>
-              <SelectValue placeholder="Select an option" />
-            </SelectTrigger>
-            <SelectContent>
-              {(field.options ?? []).map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
-      );
-    case "MULTI_SELECT": {
-      const selected: string[] = Array.isArray(value) ? (value as string[]) : [];
-      return (
-        <Field label={field.label} htmlFor={field.id} required={field.required} help={help}>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-md border border-border p-3">
-            {(field.options ?? []).map((opt) => {
-              const checked = selected.includes(opt.value);
-              return (
-                <label key={opt.value} className="flex items-center gap-2 text-sm text-text-primary">
-                  <Checkbox
-                    checked={checked}
-                    disabled={disabled}
-                    onCheckedChange={(next) => {
-                      const nextSelected = next ? [...selected, opt.value] : selected.filter((v) => v !== opt.value);
-                      onCommit(nextSelected);
-                    }}
-                  />
-                  {opt.label}
-                </label>
-              );
-            })}
-          </div>
-        </Field>
-      );
-    }
-    default:
-      return (
-        <Field label={field.label} htmlFor={field.id} help="This question type isn't available in this phase yet.">
-          <Input id={field.id} disabled placeholder="Not yet supported" />
-        </Field>
-      );
-  }
 }

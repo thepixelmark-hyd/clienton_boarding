@@ -17,13 +17,8 @@ export const updateClientSchema = createClientSchema.partial().extend({
 });
 export type UpdateClientInput = z.infer<typeof updateClientSchema>;
 
-export const createContactSchema = z.object({
-  fullName: z.string().min(1).max(200),
-  email: z.string().email(),
-  phone: z.string().max(40).optional(),
-  title: z.string().max(120).optional(),
-  isPrimary: z.boolean().optional(),
-  isDecisionMaker: z.boolean().optional(),
-  isBillingContact: z.boolean().optional(),
-});
-export type CreateContactInput = z.infer<typeof createContactSchema>;
+// Contact schemas moved to ./contacts.ts (now that contacts have their own
+// update/delete lifecycle, role enum, and optimistic-concurrency version —
+// they outgrew being an appendage of the client schema file).
+export { createContactSchema, updateContactSchema, CONTACT_ROLES } from "./contacts";
+export type { CreateContactInput, UpdateContactInput, ContactRole } from "./contacts";

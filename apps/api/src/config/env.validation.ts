@@ -11,6 +11,19 @@ const envSchema = z.object({
   SESSION_COOKIE_NAME: z.string().default("clientos_session"),
   API_PORT: z.coerce.number().int().positive().default(4000),
   WEB_APP_URL: z.string().url().default("http://localhost:3000"),
+  LOCAL_STORAGE_DIR: z.string().default("./.data/uploads"),
+  // All optional: SmtpEmailProvider only activates when SMTP_HOST is set
+  // (see email.module.ts); without it, email sends fall back to the
+  // console/log provider rather than failing to boot over an unset secret
+  // that isn't actually required to run the app.
+  SMTP_HOST: z.string().optional(),
+  // .env.example (and every environment copied from it) ships these as
+  // empty strings, not unset — a bare z.coerce.number() turns "" into 0,
+  // which then fails .positive(). Treat "" the same as unset.
+  SMTP_PORT: z.preprocess((v) => (v === "" ? undefined : v), z.coerce.number().int().positive().optional()),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASSWORD: z.string().optional(),
+  EMAIL_FROM: z.string().default("ClientOS <notifications@example.com>"),
 });
 
 export type AppEnv = z.infer<typeof envSchema>;

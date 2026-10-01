@@ -92,15 +92,24 @@ session.
 
 ## Internal vs. client visibility
 
-Any entity that clients can see (`Task`, `Comment`, `Asset`, `Requirement`,
-`Meeting`, etc.) carries a `visibility` enum: `INTERNAL | CLIENT_VISIBLE`.
-The **client portal API surface is a separate NestJS module** (`portal/`)
-with its own controllers that hard-filter `visibility: CLIENT_VISIBLE` at the
-query layer — it is not the internal API with a UI-side filter. A client
-session's guard also verifies the authenticated principal is a
-`ClientContact`, not an org `User`, and can only reach records belonging to
-their own `Client`. This means a bug in the web client can never expose
-internal data, because the client portal literally cannot query for it.
+The **client portal API surface is a separate NestJS module**
+(`apps/api/src/portal`) with its own controllers — not the internal API with
+a UI-side filter. `PortalAuthGuard` verifies the authenticated principal is
+a `ClientPortalUser`, not an internal `User`, and every portal query is
+scoped to that user's own `clientId` (not just `organizationId` — see
+`security.md` "Client portal tenant isolation"). This means a bug in the web
+client can never expose another client's data, because the portal API
+literally cannot query for it regardless of what the frontend sends.
+
+This phase's portal exposes onboarding (read-only) and requirement forms
+(view/fill/submit, gated by the portal's own `clientPortalPermissionMatrix`
+role check). The broader `Task`/`Comment`/`Asset`/`Meeting` `visibility:
+INTERNAL | CLIENT_VISIBLE` design the original architecture draft described
+is still the intended model for the Phase 4 full client portal (project
+status, deliverable review, approvals) — those models already carry a
+`visibility` enum, but the portal module doesn't query them yet, since
+project/deliverable/approval UI wasn't this phase's scope either internally
+or for the portal.
 
 ## API design
 
@@ -149,6 +158,58 @@ home screen that proves the whole chain (signup/login → persisted session →
 authenticated `GET /auth/me` → logout) end to end. Project/task/client
 screens are explicitly out of scope here — see Phase 8 below.
 
+## Client portal
+
+A deliberately separate NestJS module (`apps/api/src/portal`) and a
+separate Next.js route group (`apps/web/src/app/(portal)/portal/...`) — not
+the internal app with a role check layered on top. See `security.md`
+"Client portal is a second, fully independent auth system" for the full
+reasoning; the short version is that `ClientPortalUser`/`ClientPortalSession`
+are their own tables, the session cookie has its own name, and
+`PortalAuthGuard` is registered as a global `APP_GUARD` (not a module-local
+one) specifically so CSRF protection still covers portal mutations — a
+subtlety easy to get wrong by making it module-local, since then it would
+run after, not before, the global `CsrfGuard` that depends on it having
+already tagged the request.
+
+The web side reuses as much as possible rather than duplicating it: the same
+`FormFieldControl` component (`apps/web/src/components/forms/field-control.tsx`)
+renders a requirement form for both the internal submission page and the
+portal fill page, parameterized by a `basePath` prop (`""` vs `"/portal"`)
+so file-upload URLs hit the right API prefix — conditional-logic evaluation,
+validation display, and every field-type renderer stay in one place rather
+than two copies that could drift.
+
+`apps/web/src/middleware.ts` treats `/portal/*` as a second, independent
+boundary: it checks for the portal cookie (not the staff one) and redirects
+to `/portal/login` (not `/login`), entirely before the staff-cookie branch
+runs.
+
+## Form builder
+
+Form templates existed only as hardcoded TypeScript
+(`packages/shared/src/forms/templates/`) before this phase — real, but not
+something a non-engineer could extend. `Form.isTemplate` (previously an
+unused schema column) now has a real code path: `POST /forms` with neither
+a `clientId` nor `projectId` creates a reusable org-level template as actual
+database rows; `POST /forms/:formId/fields` etc. build it up field by field;
+`POST /forms/:formId/submissions` instantiates either kind of form (hardcoded
+catalog or builder-authored) onto a project, copying its fields into an
+independent `Form` row the same way either path already worked. A
+non-template form's fields lock (`400` on any mutation) once a submission
+exists against it — editing the question list out from under an
+already-answered form would silently change what those answers mean.
+
+Conflict detection piggybacks on the same instantiation-time copy: a
+template's `conflictRules` (declarative field-pair rules — "these two
+MULTI_SELECT fields must not overlap," "these two fields must not be equal")
+are copied onto the `Form` row at instantiation and evaluated at submit time
+by `packages/shared/src/forms/conflict.ts`, merged with the readiness
+calculation that already existed. This is deliberately narrow: it catches
+*structural* contradictions, not semantic ones ("premium positioning" vs.
+"mass-market low-cost" still needs a human or, eventually, AI — see
+`readiness.ts`'s own comment on why that's out of scope here).
+
 ## CI/CD
 
 `.github/workflows/ci.yml` runs on every push and pull request:
@@ -164,26 +225,35 @@ from the repo root — both apps pull in workspace packages via the
 root, not the app's own directory. `docker-compose.yml` at the repo root
 wires both images to a Postgres container for a local, production-like run.
 
-## Background jobs (architected)
+## Background jobs — not yet started (correction)
 
-`apps/api/src/queue` defines the BullMQ queue names and job payload types
-that Phase 5+ (email delivery, notification fan-out, document generation,
-automation execution) will use, so those features are additive rather than
-requiring a request/response → async refactor later. Redis is not yet
-provisioned in this environment; jobs currently marked TODO in code comments
-are the ones gated on that.
+An earlier version of this document claimed `apps/api/src/queue` already
+defined BullMQ queue names/payload types ready for Phase 5+. That directory
+does not exist — there is no queue scaffolding of any kind in this codebase
+today. Email sending (`apps/api/src/email`) runs synchronously inline within
+the request that triggers it, which is fine at this phase's volume but will
+need to move to a real queue (BullMQ + Redis, as originally planned) before
+notification fan-out, document generation, or automation execution are
+built — those genuinely need async workers, not just "don't block the
+response," the way a single email send doesn't yet.
 
 ## Phased roadmap
 
 This phase = **Phase 1 (complete)** + working slices of **Phase 2 and 3**.
 Recommended next phases, in order, matching the original build strategy:
 
-1. **Finish Phase 2/3**: deliverables↔requirement linking UI, dependencies,
-   calendar/workload views, project templates (dynamic template generator).
-2. **Phase 4**: client portal UI, file storage (S3 + signed URLs), creative
-   proofing/annotation, approval engine UI, asset requests.
-3. **Phase 5**: change requests UI, meetings, notifications (email via
-   queue), WhatsApp channel.
+1. **Finish Phase 2/3**: deliverables↔requirement linking (the traceability
+   spine itself — see "Known gaps"), task dependencies, calendar/workload
+   views, project templates (dynamic template generator).
+2. **Phase 4**: the client portal now has its auth/onboarding/requirements
+   foundation (this phase) — extend it with project status, deliverable
+   review, creative proofing/annotation, approval engine UI, and asset
+   requests; move file storage from local-disk to S3-compatible + signed
+   URLs (the `StorageProvider` interface this phase built makes that a
+   single new class, not a redesign).
+3. **Phase 5**: change requests UI, meetings, a real job queue (BullMQ +
+   Redis — email sending exists but runs inline; see "Background jobs"),
+   WhatsApp channel.
 4. **Phase 6**: resource management, time tracking UI, financials, retainers.
 5. **Phase 7**: AI copilot (requirement analysis, risk detection, scope
    detection) — behind a feature flag, human-confirmation-gated per §57/§58.
@@ -194,10 +264,22 @@ Recommended next phases, in order, matching the original build strategy:
 
 ## Known gaps (do not treat as done)
 
-- File **uploads** currently persist `Asset`/`AssetVersion` metadata rows,
-  but the actual binary storage adapter (S3-compatible) is stubbed behind an
-  interface (`StorageProvider`) with a local-disk implementation for
-  development only. Do not use the local-disk provider in production.
+- File **uploads**: a real `StorageProvider` interface
+  (`apps/api/src/storage`) with a working local-disk implementation now
+  exists and is wired to two real features — form-field file uploads
+  (`FILE_UPLOAD`/`IMAGE_UPLOAD`/`VIDEO_UPLOAD`) and client logos — with
+  real MIME/magic-byte/size validation (see `security.md`). It is *not*
+  wired to `Asset`/`AssetVersion`, which remain schema-only: no
+  Asset controller or service exists yet (that's the Phase 4 creative
+  proofing/review feature, still not built). An earlier version of this
+  document claimed the opposite (uploads persisting through `Asset` with a
+  storage adapter already stubbed in) — that was never true; this is the
+  correction. Do not use the local-disk `StorageProvider` in a
+  multi-instance or ephemeral-filesystem production deployment; an
+  S3-compatible implementation behind the same interface is the upgrade.
+- The requirement→deliverable traceability spine (`DeliverableRequirement`)
+  is modeled but not populated by any application code — only by seed data.
+  See `product.md` "Architected for, not built."
 - Redis/BullMQ are referenced in code structure but not provisioned in this
   environment; background jobs run inline (synchronously) for now, which is
   fine for seed/demo volume but must move to a real queue before production

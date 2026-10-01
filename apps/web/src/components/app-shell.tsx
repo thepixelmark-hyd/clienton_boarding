@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   Building2,
+  FileText,
   FolderKanban,
   LayoutDashboard,
   LogOut,
@@ -22,6 +23,7 @@ const NAV_ITEMS = [
   { href: "/", label: "Home", icon: LayoutDashboard },
   { href: "/clients", label: "Clients", icon: Building2 },
   { href: "/projects", label: "Projects", icon: FolderKanban },
+  { href: "/forms", label: "Forms", icon: FileText },
   { href: "/team", label: "Team", icon: Users },
 ];
 

@@ -26,13 +26,31 @@ describe("organization permission matrix", () => {
 });
 
 describe("client portal permission matrix", () => {
-  it("lets APPROVER approve but not manage billing", () => {
-    expect(clientPortalCan("APPROVER", "approve")).toBe(true);
-    expect(clientPortalCan("APPROVER", "billing")).toBe(false);
+  it("lets APPROVER approve a deliverable but not manage billing", () => {
+    expect(clientPortalCan("APPROVER", "approve", "deliverable")).toBe(true);
+    expect(clientPortalCan("APPROVER", "billing", "invoice")).toBe(false);
   });
 
   it("restricts VIEWER to read-only", () => {
-    expect(clientPortalCan("VIEWER", "view")).toBe(true);
-    expect(clientPortalCan("VIEWER", "comment")).toBe(false);
+    expect(clientPortalCan("VIEWER", "view", "requirement")).toBe(true);
+    expect(clientPortalCan("VIEWER", "comment", "requirement")).toBe(false);
+  });
+
+  it("only lets CLIENT_ADMIN/CLIENT_MANAGER fill in and submit a requirement form", () => {
+    expect(clientPortalCan("CLIENT_ADMIN", "edit", "requirement")).toBe(true);
+    expect(clientPortalCan("CLIENT_MANAGER", "upload", "requirement")).toBe(true);
+    expect(clientPortalCan("STAKEHOLDER", "edit", "requirement")).toBe(false);
+    expect(clientPortalCan("APPROVER", "edit", "requirement")).toBe(false);
+  });
+
+  it("scopes billing to BILLING_CONTACT and CLIENT_ADMIN only", () => {
+    expect(clientPortalCan("BILLING_CONTACT", "billing", "invoice")).toBe(true);
+    expect(clientPortalCan("CLIENT_ADMIN", "billing", "invoice")).toBe(true);
+    expect(clientPortalCan("STAKEHOLDER", "billing", "invoice")).toBe(false);
+  });
+
+  it("only lets CLIENT_ADMIN invite other portal users", () => {
+    expect(clientPortalCan("CLIENT_ADMIN", "invite", "team")).toBe(true);
+    expect(clientPortalCan("CLIENT_MANAGER", "invite", "team")).toBe(false);
   });
 });

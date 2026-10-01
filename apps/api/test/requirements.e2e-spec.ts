@@ -29,7 +29,7 @@ describe("Requirements engine (e2e)", () => {
     return project.body.id as string;
   }
 
-  it("instantiates the Logo Design template with all 19 fields", async () => {
+  it("instantiates the Logo Design template with all 21 fields", async () => {
     const { cookie } = await signupOrg(app, { email: "req1@requirements-test.example" });
     const projectId = await setupProject(cookie);
 
@@ -42,7 +42,7 @@ describe("Requirements engine (e2e)", () => {
     const submission = await api(app)
       .get(`/api/v1/forms/${res.body.form.id}/submissions/${res.body.submission.id}`)
       .set("Cookie", cookie);
-    expect(submission.body.form.fields).toHaveLength(19);
+    expect(submission.body.form.fields).toHaveLength(21);
     expect(submission.body.form.fields.map((f: { key: string }) => f.key)).toContain("packagingType");
   });
 

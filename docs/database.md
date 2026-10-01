@@ -15,10 +15,13 @@ PostgreSQL 16, managed through Prisma (`packages/database/prisma/schema.prisma`)
   `ChangeRequest`) carry `deletedAt DateTime?`. Deletion sets this field;
   reads default to `deletedAt: null` via the repository layer. Hard deletion
   is a platform-admin-only operation, not exposed in the app.
-- **Concurrency**: mutable collaborative records (`Task`, `Requirement`,
-  `Project`) carry `version Int @default(1)`. Updates require the client to
-  send the version it last read; a mismatch returns `409 CONFLICT` rather
-  than silently overwriting (§92).
+- **Concurrency**: mutable collaborative records (`Client`, `Contact`, `Task`,
+  `Requirement`, `Project`) carry `version Int @default(1)`. Updates require
+  the client to send the version it last read; a mismatch returns `409
+  CONFLICT` rather than silently overwriting (§92). On `Requirement`
+  specifically, `version` also drives `RequirementVersion` (below): every
+  version bump snapshots the prior state, so this field is both an
+  optimistic-concurrency guard and a history pointer.
 - **Audit**: `createdAt`, `updatedAt` on every model; sensitive mutations
   additionally write an `AuditLog` row (actor, entity, action, before/after
   diff) — see `security.md`.
@@ -29,24 +32,47 @@ PostgreSQL 16, managed through Prisma (`packages/database/prisma/schema.prisma`)
 
 - `Organization`, `Membership` (User × Org × Role), `Team`, `TeamMember`
 - `User`, `Session`, `Invitation`
-- `Client`, `Contact` (client-side people), `ClientPortalUser` (portal login
-  identity, distinct from internal `User`)
+- `Client`, `Contact` (client-side people, with a `ContactRole` stakeholder
+  tag — decision maker, champion, technical contact, etc. — alongside the
+  narrower `isPrimary`/`isDecisionMaker`/`isBillingContact` flags),
+  `ClientPortalUser` (portal login identity, distinct from internal `User`),
+  `ClientPortalSession` (mirrors `Session`, scoped to portal users only),
+  `ClientInvitation` (the portal's own invitation flow, distinct from staff
+  `Invitation` — different token namespace, grants a `ClientPortalRole` not
+  an `OrgRole`)
+- `ClientOnboardingItem` — one row per step for a client's onboarding
+  checklist, instantiated from a code-defined catalog
+  (`packages/shared/src/onboarding.ts`) the same way form templates work
 - `Project`, `ProjectMember`, `ProjectPhase`, `Milestone`
 - `Task` (self-relation `parentTaskId` for subtasks), `TaskDependency`
 - `Deliverable`, `DeliverableRequirement` (join table realizing the
-  requirement→deliverable traceability spine)
-- `Form`, `FormField` (with `conditionalRule` JSON for branching logic),
-  `FormSubmission`, `FormResponse` (one row per field per submission —
-  preserves the original client answer forever, per §21/§56: AI or staff
-  summaries never overwrite source responses)
+  requirement→deliverable traceability spine — modeled, but nothing in this
+  phase's application code populates it outside of seed data; see
+  architecture.md "Known gaps")
+- `Form` (`isTemplate` marks a reusable org-level template authored via the
+  form builder, as opposed to a project/client-scoped instance;
+  `conflictRules` JSON — copied from its template at instantiation — drives
+  automatic conflict detection at submit time), `FormField` (with
+  `conditionalRule` JSON for branching logic, `minSelections`/`maxSelections`
+  for `MULTI_SELECT`), `FormSubmission`, `FormResponse` (one row per field
+  per submission — preserves the original client answer forever, per
+  §21/§56: AI or staff summaries never overwrite source responses),
+  `FormResponseFile` (uploaded files for `FILE_UPLOAD`/`IMAGE_UPLOAD`/
+  `VIDEO_UPLOAD` fields — see `security.md` "File security")
 - `Requirement` (a reviewed/normalized view over a `FormSubmission`, carrying
-  readiness status: `MISSING | NEEDS_CLARIFICATION | READY | CONFLICTING`)
+  readiness status: `MISSING | NEEDS_CLARIFICATION | READY | CONFLICTING`,
+  a staff-editable `summary` distinct from the raw `FormResponse` rows, and
+  `version`), `RequirementVersion` (an immutable snapshot written every time
+  a requirement is reviewed, reopened, or resubmitted — never edited, same
+  append-only principle as `Approval`)
 - `Asset`, `AssetVersion`
 - `Comment` (polymorphic via `entityType`/`entityId`, `visibility` enum)
 - `Approval` (immutable history: each decision is a new row, never edited)
 - `ChangeRequest`
 - `Notification`
 - `AuditLog`
+- `EmailLog` — every email the app attempts to send, real or
+  console-logged-only (see `security.md` "Email")
 - `CSAT`
 - `TimeEntry`
 

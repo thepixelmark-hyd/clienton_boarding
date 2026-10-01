@@ -68,28 +68,65 @@ tested — not a mock.
   trusted from the client.
 - Design system foundation (tokens, Inter type scale, light/dark theme, and
   the core component set used by every screen below).
-- Client CRM: clients, contacts, client timeline, internal/client visibility.
+- Client CRM: clients (full edit/delete, logo upload), contacts (full
+  edit/delete, stakeholder role tagging), client timeline,
+  internal/client visibility.
+- Client onboarding: a code-defined checklist instantiated per client,
+  tracked to completion, auto-rolling the client's onboarding status up as
+  required steps finish.
 - Requirements engine: schema-driven forms with conditional (branching)
-  logic, the Logo Design questionnaire as a structured reusable template,
-  submission flow, and requirement readiness scoring.
+  logic, field-level value validation (type/shape, not just required-ness),
+  a form builder for staff-authored reusable templates and project-scoped
+  forms (not just the hardcoded catalog), the Logo Design questionnaire and
+  Website Discovery templates as structured reusable templates, submission
+  flow, requirement readiness scoring, automatic conflict detection between
+  declared field pairs (e.g. a color marked both preferred and to-avoid),
+  reviewer actions (mark ready / request clarification with a note and
+  manually-flagged conflicts), a reopen-and-resubmit cycle, and full
+  requirement version history.
+- File uploads: real upload/download/delete for `FILE_UPLOAD`/
+  `IMAGE_UPLOAD`/`VIDEO_UPLOAD` form fields and client logos, with a
+  MIME-type allow-list and magic-byte content verification (not just a
+  trusted `Content-Type` header) — see `security.md`.
+- Client portal: a fully separate authenticated surface (own session cookie,
+  own login/invitation flow, own permission matrix) where an invited client
+  contact can view their onboarding checklist and fill in/submit assigned
+  requirement forms — never the internal project-management UI.
+- Email notifications: a real `EmailProvider` abstraction wired to staff and
+  client-portal invitations and requirement-submitted notices — delivers for
+  real once SMTP credentials are configured, logs to an inspectable
+  `EmailLog` table otherwise (see `security.md` "Email").
 - Projects: phases, milestones, tasks, list + board views, computed project
   health with evidence.
+- Android application foundation: auth, session, navigation, and theming —
+  see `architecture.md` "Mobile (Android) architecture". Project/requirement
+  screens on Android are still Phase 8, not this phase.
 - Seed data producing a realistic demo agency (see `seed.ts`).
-- Automated tests: unit tests for guards/services and integration tests
-  against a real Postgres database, including negative tests for
-  cross-tenant access and role escalation.
+- Automated tests: unit tests for guards/services/business logic and
+  integration tests against a real Postgres database — including negative
+  tests for cross-tenant access, role escalation, and (new this phase) a
+  portal user from one client reaching another client's data in the *same*
+  organization.
 
 **Architected for, not built in this phase** (explicitly flagged, not
 half-implemented, per the project's own "no partial implementation" rule —
 these are documented as the next engineering phases in `architecture.md`
 rather than shipped as broken UI):
 
-- Native Android app (Kotlin/Compose).
-- Creative proofing/annotation canvas, file storage backend (S3), signed URLs.
-- Email (Gmail/Outlook), WhatsApp Business, calendar/meeting integrations.
+- The requirement→deliverable traceability spine's actual linking (the data
+  model supports it; no application code populates it outside seed data —
+  see `architecture.md` "Known gaps").
+- Creative proofing/annotation canvas, an S3-compatible production storage
+  backend (local-disk works today; see `architecture.md`), signed URLs for
+  it.
+- Gmail/Outlook inbox integration, WhatsApp Business, calendar/meeting
+  integrations. (Outbound transactional email itself — invitations,
+  submission notices — is now built; see "Delivered" above.)
 - Visual automation engine, AI project copilot, AI requirement analysis.
 - Billing/subscription management, platform admin console, feature flags.
 - Resource management, time tracking UI, financial reporting.
+- Project/task/requirement screens on the Android app (the auth/session/nav
+  foundation is built; see "Delivered" above).
 
 See `/docs/architecture.md` §"Phased roadmap" for the recommended build order
 for these.

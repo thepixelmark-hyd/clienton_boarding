@@ -57,17 +57,18 @@ model User {
   updatedAt    DateTime  @updatedAt
   deletedAt    DateTime?
 
-  memberships        Membership[]
-  sessions           Session[]
-  invitationsSent    Invitation[]
-  projectMemberships ProjectMember[]
-  teamMemberships    TeamMember[]
-  assignedTasks      Task[]          @relation("TaskAssignee")
-  comments           Comment[]
-  timeEntries        TimeEntry[]
-  notifications      Notification[]
-  auditLogs          AuditLog[]      @relation("AuditActor")
-  approvalsDecided   Approval[]      @relation("ApprovalDecidedBy")
+  memberships           Membership[]
+  sessions              Session[]
+  invitationsSent       Invitation[]
+  clientInvitationsSent ClientInvitation[]
+  projectMemberships    ProjectMember[]
+  teamMemberships       TeamMember[]
+  assignedTasks         Task[]             @relation("TaskAssignee")
+  comments              Comment[]
+  timeEntries           TimeEntry[]
+  notifications         Notification[]
+  auditLogs             AuditLog[]         @relation("AuditActor")
+  approvalsDecided      Approval[]         @relation("ApprovalDecidedBy")
 
   @@map("users")
 }
@@ -201,6 +202,9 @@ model Client {
   website          String?
   industry         String?
   description      String?
+  // Storage key into the StorageProvider (apps/api/src/storage), not a
+  // public URL — served through GET /clients/:id/logo after a tenant check,
+  // same "never a public bucket path" rule as Asset (see security.md).
   logoUrl          String?
   timezone         String           @default("UTC")
   status           ClientStatus     @default(ACTIVE)
@@ -211,36 +215,58 @@ model Client {
   deletedAt        DateTime?
   version          Int              @default(1)
 
-  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  contacts       Contact[]
-  projects       Project[]
-  forms          Form[]
-  portalUsers    ClientPortalUser[]
-  timelineEvents ClientTimelineEvent[]
-  csatResponses  CSAT[]
+  organization    Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contacts        Contact[]
+  projects        Project[]
+  forms           Form[]
+  portalUsers     ClientPortalUser[]
+  timelineEvents  ClientTimelineEvent[]
+  csatResponses   CSAT[]
+  onboardingItems ClientOnboardingItem[]
+  invitations     ClientInvitation[]
 
   @@index([organizationId])
   @@index([organizationId, status])
   @@map("clients")
 }
 
+// A stable tag for what this person's stake in the engagement actually is,
+// distinct from the three narrower booleans below (a contact can be e.g.
+// both the DECISION_MAKER and the BILLING_CONTACT at once — the booleans
+// capture that overlap; `role` captures the primary way staff should think
+// of them when deciding who to loop in on what).
+enum ContactRole {
+  DECISION_MAKER
+  CHAMPION
+  INFLUENCER
+  TECHNICAL_CONTACT
+  END_USER
+  BILLING
+  LEGAL
+  APPROVER
+  OTHER
+}
+
 model Contact {
-  id               String    @id @default(cuid())
+  id               String      @id @default(cuid())
   organizationId   String
   clientId         String
   fullName         String
   email            String
   phone            String?
   title            String?
-  isPrimary        Boolean   @default(false)
-  isDecisionMaker  Boolean   @default(false)
-  isBillingContact Boolean   @default(false)
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  role             ContactRole @default(OTHER)
+  isPrimary        Boolean     @default(false)
+  isDecisionMaker  Boolean     @default(false)
+  isBillingContact Boolean     @default(false)
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
   deletedAt        DateTime?
+  version          Int         @default(1)
 
-  client      Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  client      Client             @relation(fields: [clientId], references: [id], onDelete: Cascade)
   portalUser  ClientPortalUser?
+  invitations ClientInvitation[]
 
   @@index([clientId])
   @@index([organizationId])
@@ -264,6 +290,7 @@ model ClientPortalUser {
   email          String
   passwordHash   String
   role           ClientPortalRole @default(VIEWER)
+  lastLoginAt    DateTime?
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
 
@@ -274,6 +301,71 @@ model ClientPortalUser {
   @@unique([clientId, email])
   @@index([organizationId])
   @@map("client_portal_users")
+}
+
+// A code-defined onboarding checklist (see packages/shared/src/onboarding.ts,
+// same "catalog in code, instances in the DB" pattern as form templates) is
+// instantiated into one row per step for a given client when onboarding
+// starts. `key` is the stable identifier from that catalog — it's what lets
+// a later catalog change not orphan already-instantiated rows.
+enum OnboardingItemStatus {
+  PENDING
+  IN_PROGRESS
+  DONE
+  SKIPPED
+}
+
+model ClientOnboardingItem {
+  id             String               @id @default(cuid())
+  organizationId String
+  clientId       String
+  key            String
+  title          String
+  description    String?
+  order          Int
+  isRequired     Boolean              @default(true)
+  status         OnboardingItemStatus @default(PENDING)
+  completedAt    DateTime?
+  completedById  String?
+  relatedFormId  String?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  client      Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  relatedForm Form?  @relation(fields: [relatedFormId], references: [id])
+
+  @@unique([clientId, key])
+  @@index([clientId])
+  @@index([organizationId])
+  @@map("client_onboarding_items")
+}
+
+// A portal invitation is a distinct flow from the staff Invitation model
+// above: it targets a Client's contact (not an org member-to-be) and grants
+// a ClientPortalRole (not an OrgRole). Reuses InvitationStatus since the
+// lifecycle (pending/accepted/expired/revoked) is identical.
+model ClientInvitation {
+  id             String           @id @default(cuid())
+  organizationId String
+  clientId       String
+  contactId      String?
+  email          String
+  role           ClientPortalRole @default(STAKEHOLDER)
+  tokenHash      String           @unique
+  status         InvitationStatus @default(PENDING)
+  invitedById    String
+  expiresAt      DateTime
+  createdAt      DateTime         @default(now())
+  acceptedAt     DateTime?
+
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  contact   Contact? @relation(fields: [contactId], references: [id])
+  invitedBy User     @relation(fields: [invitedById], references: [id])
+
+  @@index([organizationId])
+  @@index([clientId])
+  @@index([email])
+  @@map("client_invitations")
 }
 
 model ClientPortalSession {
@@ -319,7 +411,7 @@ enum ProjectStatus {
 }
 
 model Project {
-  id             String    @id @default(cuid())
+  id             String        @id @default(cuid())
   organizationId String
   clientId       String
   name           String
@@ -329,12 +421,12 @@ model Project {
   startDate      DateTime?
   targetEndDate  DateTime?
   actualEndDate  DateTime?
-  contractValue  Decimal?  @db.Decimal(14, 2)
-  budgetHours    Decimal?  @db.Decimal(10, 2)
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  contractValue  Decimal?      @db.Decimal(14, 2)
+  budgetHours    Decimal?      @db.Decimal(10, 2)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
   deletedAt      DateTime?
-  version        Int       @default(1)
+  version        Int           @default(1)
 
   organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   client         Client          @relation(fields: [clientId], references: [id], onDelete: Cascade)
@@ -510,7 +602,7 @@ model Deliverable {
   updatedAt          DateTime          @updatedAt
   deletedAt          DateTime?
 
-  project          Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project          Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   tasks            Task[]
   requirementLinks DeliverableRequirement[]
   assets           Asset[]
@@ -569,15 +661,28 @@ model Form {
   templateKey    String?
   name           String
   description    String?
+  // true = a reusable org-level template authored via the form builder
+  // (POST /forms + /forms/:id/fields), stored as real rows rather than the
+  // hardcoded FORM_TEMPLATES catalog — see docs/architecture.md. A template
+  // Form has no clientId/projectId; instantiating it onto a project copies
+  // its fields into a fresh non-template Form, same as the hardcoded
+  // catalog's instantiateOnProject already does.
   isTemplate     Boolean  @default(false)
+  // Snapshotted from the originating template (hardcoded or DB) at
+  // instantiation time — evaluated at submit to auto-detect contradictory
+  // answers (packages/shared/src/forms/readiness.ts). Living on the Form
+  // instance, not re-read from the template, so editing a template later
+  // never changes the rules an already-filled-in form is judged against.
+  conflictRules  Json?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  client       Client?          @relation(fields: [clientId], references: [id])
-  project      Project?         @relation(fields: [projectId], references: [id])
-  fields       FormField[]
-  submissions  FormSubmission[]
+  organization    Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  client          Client?                @relation(fields: [clientId], references: [id])
+  project         Project?               @relation(fields: [projectId], references: [id])
+  fields          FormField[]
+  submissions     FormSubmission[]
+  onboardingItems ClientOnboardingItem[]
 
   @@index([organizationId])
   @@map("forms")
@@ -598,6 +703,10 @@ model FormField {
   required        Boolean       @default(false)
   order           Int
   options         Json?
+  // MULTI_SELECT only — enforced by validateFieldValue (packages/shared)
+  // at save time, not just descriptive metadata the renderer ignores.
+  minSelections   Int?
+  maxSelections   Int?
   conditionalRule Json?
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
@@ -616,16 +725,16 @@ enum SubmissionStatus {
 }
 
 model FormSubmission {
-  id                    String           @id @default(cuid())
-  formId                String
-  organizationId        String
-  clientId              String?
-  submittedByContactId  String?
-  submittedByUserId     String?
-  status                SubmissionStatus @default(DRAFT)
-  submittedAt           DateTime?
-  createdAt             DateTime         @default(now())
-  updatedAt             DateTime         @updatedAt
+  id                   String           @id @default(cuid())
+  formId               String
+  organizationId       String
+  clientId             String?
+  submittedByContactId String?
+  submittedByUserId    String?
+  status               SubmissionStatus @default(DRAFT)
+  submittedAt          DateTime?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
 
   form        Form           @relation(fields: [formId], references: [id], onDelete: Cascade)
   responses   FormResponse[]
@@ -648,11 +757,33 @@ model FormResponse {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  submission FormSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
-  field      FormField      @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  submission FormSubmission     @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  field      FormField          @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  files      FormResponseFile[]
 
   @@unique([submissionId, fieldId])
   @@map("form_responses")
+}
+
+// One row per uploaded file for a FILE_UPLOAD/IMAGE_UPLOAD/VIDEO_UPLOAD
+// response. `storageKey` is an opaque key into the StorageProvider — never
+// served directly, same rule as AssetVersion (see security.md "File
+// security"). A field can hold more than one file (e.g. several reference
+// images), hence a separate table rather than a single column on FormResponse.
+model FormResponseFile {
+  id           String   @id @default(cuid())
+  responseId   String
+  originalName String
+  mimeType     String
+  sizeBytes    Int
+  storageKey   String
+  uploadedById String?
+  createdAt    DateTime @default(now())
+
+  response FormResponse @relation(fields: [responseId], references: [id], onDelete: Cascade)
+
+  @@index([responseId])
+  @@map("form_response_files")
 }
 
 enum RequirementReadiness {
@@ -663,27 +794,57 @@ enum RequirementReadiness {
 }
 
 model Requirement {
-  id             String                @id @default(cuid())
+  id             String               @id @default(cuid())
   organizationId String
   projectId      String?
-  submissionId   String                @unique
+  submissionId   String               @unique
   title          String
   summary        String?
-  readiness      RequirementReadiness  @default(MISSING)
+  readiness      RequirementReadiness @default(MISSING)
   missingFields  Json?
   conflicts      Json?
   reviewedById   String?
   reviewedAt     DateTime?
-  createdAt      DateTime              @default(now())
-  updatedAt      DateTime              @updatedAt
+  // A reviewer's note explaining why they sent this back as
+  // NEEDS_CLARIFICATION — distinct from `conflicts`, which is specific
+  // field-pair contradictions rather than free-text reviewer feedback.
+  reviewNote     String?
+  version        Int                  @default(1)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
   deletedAt      DateTime?
 
-  submission       FormSubmission            @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  submission       FormSubmission           @relation(fields: [submissionId], references: [id], onDelete: Cascade)
   deliverableLinks DeliverableRequirement[]
+  versions         RequirementVersion[]
 
   @@index([organizationId])
   @@index([projectId])
   @@map("requirements")
+}
+
+// An immutable snapshot taken every time a Requirement's summary, readiness,
+// or reviewer decision changes (first submit, review decision, resubmit
+// after being reopened) — never edited once written, same "append-only
+// history" principle as Approval. Lets staff see exactly what changed
+// between versions rather than only the current state.
+model RequirementVersion {
+  id            String               @id @default(cuid())
+  requirementId String
+  version       Int
+  summary       String?
+  readiness     RequirementReadiness
+  missingFields Json?
+  conflicts     Json?
+  changedById   String?
+  changeNote    String?
+  createdAt     DateTime             @default(now())
+
+  requirement Requirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+
+  @@unique([requirementId, version])
+  @@index([requirementId])
+  @@map("requirement_versions")
 }
 
 // ---------------------------------------------------------------------------
@@ -702,8 +863,8 @@ model Asset {
   updatedAt      DateTime   @updatedAt
   deletedAt      DateTime?
 
-  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  deliverable Deliverable? @relation(fields: [deliverableId], references: [id])
+  project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  deliverable Deliverable?   @relation(fields: [deliverableId], references: [id])
   versions    AssetVersion[]
 
   @@index([projectId])
@@ -796,21 +957,21 @@ enum ChangeRequestStatus {
 }
 
 model ChangeRequest {
-  id                    String               @id @default(cuid())
-  organizationId        String
-  projectId             String
-  title                 String
-  description           String
-  reason                String?
-  impact                String?
-  estimatedEffortHours  Decimal?             @db.Decimal(8, 2)
-  estimatedCost         Decimal?             @db.Decimal(12, 2)
-  timelineImpactDays    Int?
-  status                ChangeRequestStatus  @default(DRAFT)
-  requestedById         String?
-  requestedByContactId  String?
-  createdAt             DateTime             @default(now())
-  updatedAt             DateTime             @updatedAt
+  id                   String              @id @default(cuid())
+  organizationId       String
+  projectId            String
+  title                String
+  description          String
+  reason               String?
+  impact               String?
+  estimatedEffortHours Decimal?            @db.Decimal(8, 2)
+  estimatedCost        Decimal?            @db.Decimal(12, 2)
+  timelineImpactDays   Int?
+  status               ChangeRequestStatus @default(DRAFT)
+  requestedById        String?
+  requestedByContactId String?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
@@ -838,6 +999,26 @@ model Notification {
 
   @@index([userId, readAt])
   @@map("notifications")
+}
+
+// Every email the app attempts to send is recorded here regardless of which
+// EmailProvider handled it (apps/api/src/email) — the console/dev provider
+// writes this as its only real effect, and the SMTP provider writes it
+// alongside actually sending, so delivery is inspectable/testable either way
+// without depending on a real inbox existing in every environment.
+model EmailLog {
+  id             String   @id @default(cuid())
+  organizationId String?
+  to             String
+  subject        String
+  template       String
+  metadata       Json?
+  provider       String
+  sentAt         DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([to])
+  @@map("email_logs")
 }
 
 model AuditLog {

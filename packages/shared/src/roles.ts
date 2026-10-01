@@ -196,17 +196,70 @@ export function can(role: OrgRole, action: Action, resource: Resource): boolean 
   return organizationPermissionMatrix[role]?.[resource]?.includes(action) ?? false;
 }
 
-const CLIENT_PORTAL_FULL: Action[] = ["view", "comment", "upload", "approve"];
+/**
+ * The client portal's own resource vocabulary — deliberately smaller and
+ * different from the internal `Resource` type above, because a portal user
+ * never sees internal-only resources like `task`/`asset`/`changeRequest`
+ * (see architecture.md "Internal vs. client visibility"). `team` covers
+ * managing *other* portal users for the same client (invite/view), separate
+ * from `invoice`, which previously shared the generic `billing` action with
+ * no resource to scope it to.
+ */
+export type PortalResource = "requirement" | "onboarding" | "project" | "deliverable" | "invoice" | "team";
 
-export const clientPortalPermissionMatrix: Record<ClientPortalRole, Action[]> = {
-  CLIENT_ADMIN: ["view", "comment", "upload", "approve", "invite", "billing"],
-  CLIENT_MANAGER: CLIENT_PORTAL_FULL,
-  STAKEHOLDER: ["view", "comment"],
-  APPROVER: ["view", "comment", "approve"],
-  VIEWER: ["view"],
-  BILLING_CONTACT: ["view", "billing"],
+const PORTAL_READ_ONLY: Record<PortalResource, Action[]> = {
+  requirement: ["view"],
+  onboarding: ["view"],
+  project: ["view"],
+  deliverable: ["view"],
+  invoice: [],
+  team: [],
 };
 
-export function clientPortalCan(role: ClientPortalRole, action: Action): boolean {
-  return clientPortalPermissionMatrix[role]?.includes(action) ?? false;
+/**
+ * clientPortalPermissionMatrix[role][resource] = set of allowed actions,
+ * mirroring organizationPermissionMatrix's shape so both sides of the app
+ * read the same way. Only CLIENT_ADMIN/CLIENT_MANAGER can actually fill in
+ * and submit a requirement form (`edit`+`upload`) — other roles can view and
+ * comment on it, matching a real engagement where one or two named people
+ * own the brief but the wider stakeholder group stays informed.
+ */
+export const clientPortalPermissionMatrix: Record<ClientPortalRole, Record<PortalResource, Action[]>> = {
+  CLIENT_ADMIN: {
+    requirement: ["view", "edit", "comment", "upload"],
+    onboarding: ["view", "edit"],
+    project: ["view", "comment"],
+    deliverable: ["view", "comment", "approve"],
+    invoice: ["view", "billing"],
+    team: ["view", "invite"],
+  },
+  CLIENT_MANAGER: {
+    requirement: ["view", "edit", "comment", "upload"],
+    onboarding: ["view", "edit"],
+    project: ["view", "comment"],
+    deliverable: ["view", "comment", "approve"],
+    invoice: ["view"],
+    team: ["view"],
+  },
+  STAKEHOLDER: {
+    ...PORTAL_READ_ONLY,
+    requirement: ["view", "comment"],
+    project: ["view", "comment"],
+    deliverable: ["view", "comment"],
+  },
+  APPROVER: {
+    ...PORTAL_READ_ONLY,
+    requirement: ["view", "comment"],
+    project: ["view", "comment"],
+    deliverable: ["view", "comment", "approve"],
+  },
+  VIEWER: PORTAL_READ_ONLY,
+  BILLING_CONTACT: {
+    ...PORTAL_READ_ONLY,
+    invoice: ["view", "billing"],
+  },
+};
+
+export function clientPortalCan(role: ClientPortalRole, action: Action, resource: PortalResource): boolean {
+  return clientPortalPermissionMatrix[role]?.[resource]?.includes(action) ?? false;
 }

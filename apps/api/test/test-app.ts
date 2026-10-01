@@ -24,6 +24,7 @@ export function getPrisma(app: INestApplication): PrismaService {
  * (children before parents) since we don't rely on cascade here. */
 export async function truncateAll(prisma: PrismaService) {
   const tableNames = [
+    "email_logs",
     "audit_logs",
     "csat_responses",
     "time_entries",
@@ -33,7 +34,9 @@ export async function truncateAll(prisma: PrismaService) {
     "asset_versions",
     "assets",
     "deliverable_requirements",
+    "requirement_versions",
     "requirements",
+    "form_response_files",
     "form_responses",
     "form_submissions",
     "form_fields",
@@ -45,6 +48,8 @@ export async function truncateAll(prisma: PrismaService) {
     "project_members",
     "projects",
     "client_timeline_events",
+    "client_invitations",
+    "client_onboarding_items",
     "client_portal_sessions",
     "client_portal_users",
     "contacts",

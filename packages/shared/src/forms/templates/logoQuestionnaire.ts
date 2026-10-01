@@ -23,6 +23,21 @@ const ADJECTIVE_OPTIONS = [
   "Authoritative",
 ].map((label) => ({ value: label.toLowerCase(), label }));
 
+const COLOR_OPTIONS = [
+  "Black",
+  "White",
+  "Navy",
+  "Blue",
+  "Green",
+  "Red",
+  "Orange",
+  "Yellow",
+  "Purple",
+  "Gold",
+  "Gray",
+  "Brown",
+].map((c) => ({ value: c.toLowerCase(), label: c }));
+
 /**
  * The original brief was a static PDF questionnaire. This is a structured,
  * reusable digital form: every question is a typed field with a stable key,
@@ -130,26 +145,21 @@ export const logoQuestionnaireTemplate: FormTemplateDefinition = {
       label: "Preferred colors",
       type: "MULTI_SELECT",
       required: false,
-      options: [
-        "Black",
-        "White",
-        "Navy",
-        "Blue",
-        "Green",
-        "Red",
-        "Orange",
-        "Yellow",
-        "Purple",
-        "Gold",
-        "Gray",
-        "Brown",
-      ].map((c) => ({ value: c.toLowerCase(), label: c })),
+      options: COLOR_OPTIONS,
     },
     {
       key: "colorsToAvoid",
-      label: "Colors to avoid, and why",
+      label: "Colors to avoid",
+      type: "MULTI_SELECT",
+      required: false,
+      options: COLOR_OPTIONS,
+    },
+    {
+      key: "colorsToAvoidNote",
+      label: "Why avoid those colors?",
       type: "SHORT_TEXT",
       required: false,
+      conditionalRule: { field: "colorsToAvoid", operator: "isNotEmpty" },
     },
     {
       key: "competitors",
@@ -180,10 +190,25 @@ export const logoQuestionnaireTemplate: FormTemplateDefinition = {
       options: ADJECTIVE_OPTIONS,
     },
     {
+      key: "referenceImages",
+      label: "Reference logos or inspiration images",
+      helpText: "Upload any logos, mood boards, or competitor marks you like (or want to avoid).",
+      type: "IMAGE_UPLOAD",
+      required: false,
+    },
+    {
       key: "additionalNotes",
       label: "Anything else the designer should know?",
       type: "LONG_TEXT",
       required: false,
+    },
+  ],
+  conflictRules: [
+    {
+      fieldAKey: "preferredColors",
+      fieldBKey: "colorsToAvoid",
+      kind: "no-overlap",
+      note: "A color appears in both \"preferred colors\" and \"colors to avoid\" — confirm with the client which one is right.",
     },
   ],
 };

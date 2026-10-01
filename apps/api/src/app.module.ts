@@ -9,8 +9,10 @@ import { AuthModule } from "./auth/auth.module";
 import { ClientsModule } from "./clients/clients.module";
 import { ProjectsModule } from "./projects/projects.module";
 import { FormsModule } from "./forms/forms.module";
+import { PortalModule } from "./portal/portal.module";
 import { HttpExceptionFilter } from "./common/filters/http-exception.filter";
 import { SessionAuthGuard } from "./common/guards/session-auth.guard";
+import { PortalAuthGuard } from "./portal/portal-auth.guard";
 import { CsrfGuard } from "./common/guards/csrf.guard";
 import { PermissionsGuard } from "./common/guards/permissions.guard";
 import { LoggingInterceptor } from "./common/interceptors/logging.interceptor";
@@ -31,13 +33,18 @@ import { CorrelationIdMiddleware } from "./common/middleware/correlation-id.midd
     ClientsModule,
     ProjectsModule,
     FormsModule,
+    PortalModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: HttpExceptionFilter },
     { provide: APP_INTERCEPTOR, useClass: LoggingInterceptor },
-    // Order matters: session resolution, then CSRF (needs authSource from
-    // the session guard), then permission checks.
+    // Order matters: staff session resolution, then portal session
+    // resolution (a no-op unless a portal cookie is present — see
+    // PortalAuthGuard's own comment on why it must run here and not as a
+    // module-local guard), then CSRF (needs authSource from whichever of
+    // the two set it), then permission checks.
     { provide: APP_GUARD, useClass: SessionAuthGuard },
+    { provide: APP_GUARD, useClass: PortalAuthGuard },
     { provide: APP_GUARD, useClass: CsrfGuard },
     { provide: APP_GUARD, useClass: PermissionsGuard },
   ],
