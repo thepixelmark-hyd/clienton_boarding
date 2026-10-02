@@ -48,8 +48,9 @@ nothing to gain from forcing them into one dependency graph.
 Organization
  ├─ Membership (User × Role)
  ├─ Team ─ TeamMember
+ ├─ ProjectTemplate (reusable blueprint, not tied to a Client)
  ├─ Client ─ Contact
- │    └─ Project
+ │    └─ Project (optionally sourced from a ProjectTemplate)
  │         ├─ ProjectMember
  │         ├─ Phase ─ Milestone
  │         ├─ Task (self-referential Subtask, Dependency)
@@ -59,6 +60,7 @@ Organization
  │         ├─ Comment / Conversation / Message
  │         ├─ Approval
  │         ├─ ChangeRequest
+ │         ├─ ProjectActivityEvent (append-only history feed)
  │         └─ TimeEntry
  ├─ Invitation
  ├─ Notification
@@ -101,15 +103,30 @@ scoped to that user's own `clientId` (not just `organizationId` — see
 client can never expose another client's data, because the portal API
 literally cannot query for it regardless of what the frontend sends.
 
-This phase's portal exposes onboarding (read-only) and requirement forms
-(view/fill/submit, gated by the portal's own `clientPortalPermissionMatrix`
-role check). The broader `Task`/`Comment`/`Asset`/`Meeting` `visibility:
-INTERNAL | CLIENT_VISIBLE` design the original architecture draft described
-is still the intended model for the Phase 4 full client portal (project
-status, deliverable review, approvals) — those models already carry a
-`visibility` enum, but the portal module doesn't query them yet, since
-project/deliverable/approval UI wasn't this phase's scope either internally
-or for the portal.
+The portal now also exposes a **project dashboard** (`GET /portal/projects`,
+`GET /portal/projects/:id` — `ProjectsService.getPortalDetail`), scoped by
+both `organizationId` and `clientId` the same way every other portal query
+is. It deliberately shows less than the internal project detail page:
+
+- **Milestones and deliverables are shown in full** — they're inherently
+  client-facing concepts (a deliverable is literally the thing being
+  delivered), so no `visibility` filter applies to them.
+- **Tasks are filtered by `Task.visibility`**: only `CLIENT_VISIBLE` tasks
+  are returned with their title; the rest only count toward the aggregate
+  `progress.totalTasks`/`progress.doneTasks` numbers (so a client sees "12 of
+  18 tasks complete" without ever seeing an internal task's title or notes).
+  This is the `Task`/`Comment`/`Asset` `visibility: INTERNAL |
+  CLIENT_VISIBLE` design the original architecture draft described, now
+  actually wired into a real query rather than just a schema column with
+  nothing reading it — that was the gap a previous version of this
+  document flagged; it's closed for `Task` as of this phase. `Comment`/
+  `Asset` visibility filtering is still Phase 4 (creative review, proofing).
+- A **"waiting on you"** section surfaces deliverables in `IN_REVIEW` status
+  and the count of the client's still-open requirements — both computed from
+  real rows, not a guess.
+
+Onboarding and requirement forms (view/fill/submit) remain as before, gated
+by the portal's own `clientPortalPermissionMatrix` role check.
 
 ## API design
 
@@ -210,6 +227,69 @@ calculation that already existed. This is deliberately narrow: it catches
 "mass-market low-cost" still needs a human or, eventually, AI — see
 `readiness.ts`'s own comment on why that's out of scope here).
 
+## Project engine (templates, traceability, dashboards)
+
+**Project templates** follow the same "catalog authored as data, not code"
+pattern the form builder established in Phase 2, but go one step further:
+`ProjectTemplate.phases`/`milestones`/`tasks` are JSON arrays of plain
+objects keyed by an author-chosen `key` string (not a database id — the
+template has no child rows), so a milestone can declare its `phaseKey` and a
+task its `milestoneKey`/`parentKey`/`dependsOnKeys` before any of it exists
+as a real row. `packages/shared/src/projectTemplates.ts`'s
+`validateTemplateBlueprint` checks every cross-reference resolves and that
+the task-dependency graph has no cycle *before* the blueprint is persisted
+(same shape of check as `TasksService.wouldCreateCycle`, just over template
+keys instead of ids). `ProjectTemplatesService.instantiate` then walks the
+arrays once inside a transaction, resolving every key into a freshly
+created `ProjectPhase`/`Milestone`/`Task` id and turning each `*OffsetDays`
+field into a real date relative to the new project's start date (today, if
+none is given). The result is indistinguishable from a project a PM built
+by hand field-by-field — real rows, not a "template reference" the rest of
+the app has to special-case.
+
+**The traceability spine is now populated by real application code**, not
+just seed data (see `product.md` "The traceability spine" and the
+correction below): `DeliverablesService` manages `DeliverableRequirement`
+links (with a guard that a requirement can only link to a deliverable in
+the *same* project), and a `Task` cites the deliverable it serves through
+the `deliverableId` field the create/update task endpoints already
+accepted. `GET /projects/:id/traceability` reads both halves together —
+every deliverable with its linked requirements and tasks, plus the list of
+requirements *not yet* linked to anything, so a PM can see the gap rather
+than only the happy path.
+
+**Project activity** (`ProjectActivityEvent`, `ProjectActivityService`) is a
+human-readable, project-scoped feed — distinct from `AuditLog`'s generic
+before/after diff — written alongside the mutation that causes it: project/
+task/milestone/deliverable created or status-changed, a member added or
+removed, a requirement linked, a template instantiated, a task comment
+added. `GET /projects/:id/activity` returns the latest 50, newest first.
+
+**"Waiting on client"** is a first-class, queryable state rather than
+something inferred from status alone: `Task.waitingOnClient` (+ an optional
+note) is orthogonal to `Task.status` — a task can be `IN_PROGRESS` and
+*also* stalled on the client providing something. The internal project
+dashboard (`GET /projects/:id/dashboard`) and the client portal's own
+"waiting on you" section both read this directly, alongside deliverables in
+`IN_REVIEW` and open requirements, rather than three different ad hoc
+heuristics.
+
+**Project dashboards never return placeholder numbers.** Every figure in
+`GET /projects/:id/dashboard` — task-status breakdown, overdue-task list,
+upcoming milestones, deliverable-status breakdown, waiting-on-client counts
+— is a real Prisma aggregate (`groupBy`, `count`, `findMany` with a
+`dueDate: { lt: now }` filter) computed at request time. The same rule
+applies to the client portal's project detail: `progress.totalTasks`/
+`doneTasks` are real counts, not an estimate.
+
+**Views**: list and Kanban board (task-level), a CSS-only Gantt-style
+timeline and a month calendar (both computed client-side from already-
+fetched phase/milestone/task dates — no server-side calendar logic, no
+charting library), and a workload view (tasks grouped by assignee with
+real per-status counts and summed estimated hours). All of these read from
+data the API already returns; none of them required a new aggregate
+endpoint beyond the dashboard above.
+
 ## CI/CD
 
 `.github/workflows/ci.yml` runs on every push and pull request:
@@ -239,28 +319,30 @@ response," the way a single email send doesn't yet.
 
 ## Phased roadmap
 
-This phase = **Phase 1 (complete)** + working slices of **Phase 2 and 3**.
+This phase = **Phase 1 (complete)** + **Phase 2 (complete)** + **Phase 3
+(complete)**: the full project/task/milestone/deliverable engine, with
+templates, traceability, dashboards, and the client portal's project view.
 Recommended next phases, in order, matching the original build strategy:
 
-1. **Finish Phase 2/3**: deliverables↔requirement linking (the traceability
-   spine itself — see "Known gaps"), task dependencies, calendar/workload
-   views, project templates (dynamic template generator).
-2. **Phase 4**: the client portal now has its auth/onboarding/requirements
-   foundation (this phase) — extend it with project status, deliverable
-   review, creative proofing/annotation, approval engine UI, and asset
+1. **Phase 4**: the client portal now has auth/onboarding/requirements *and*
+   a read-only project dashboard (this phase) — extend it with deliverable
+   review/approval actions, creative proofing/annotation, and asset
    requests; move file storage from local-disk to S3-compatible + signed
-   URLs (the `StorageProvider` interface this phase built makes that a
-   single new class, not a redesign).
-3. **Phase 5**: change requests UI, meetings, a real job queue (BullMQ +
+   URLs (the `StorageProvider` interface built in Phase 2 makes that a
+   single new class, not a redesign); build the `Asset`/`AssetVersion`
+   controller/service that still doesn't exist (see "Known gaps").
+2. **Phase 5**: change requests UI, meetings, a real job queue (BullMQ +
    Redis — email sending exists but runs inline; see "Background jobs"),
    WhatsApp channel.
-4. **Phase 6**: resource management, time tracking UI, financials, retainers.
-5. **Phase 7**: AI copilot (requirement analysis, risk detection, scope
+3. **Phase 6**: resource management (an org-wide workload view across
+   projects, not just the per-project one this phase built), time tracking
+   UI, financials, retainers.
+4. **Phase 7**: AI copilot (requirement analysis, risk detection, scope
    detection) — behind a feature flag, human-confirmation-gated per §57/§58.
-6. **Phase 8**: Android app — the client-facing screens (projects, tasks,
+5. **Phase 8**: Android app — the client-facing screens (projects, tasks,
    requirements, client CRM) on top of the auth/navigation/theme foundation
    already built (see "Mobile (Android) architecture" above).
-7. **Phase 9**: full security/performance audit pass, admin console, billing.
+6. **Phase 9**: full security/performance audit pass, admin console, billing.
 
 ## Known gaps (do not treat as done)
 
@@ -278,8 +360,21 @@ Recommended next phases, in order, matching the original build strategy:
   multi-instance or ephemeral-filesystem production deployment; an
   S3-compatible implementation behind the same interface is the upgrade.
 - The requirement→deliverable traceability spine (`DeliverableRequirement`)
-  is modeled but not populated by any application code — only by seed data.
-  See `product.md` "Architected for, not built."
+  is now populated by real application code (`DeliverablesService`,
+  `GET /projects/:id/traceability`) as of Phase 3 — a previous version of
+  this document said it was seed-data-only; that's corrected. What's still
+  missing is an *approval* workflow gating a deliverable's handoff
+  (`Approval` remains schema-only, no controller/service) — that's Phase 4's
+  creative review/approval engine, not this phase's scope.
+- Project templates (`ProjectTemplate`) store their blueprint as JSON arrays
+  rather than relational child rows (see `architecture.md` "Project
+  templates"); this trades per-node granular editing (e.g. a dedicated
+  "rename this one template task" endpoint) for a much simpler persistence
+  model, matching the scope of what this phase needed. Authoring happens by
+  replacing the whole blueprint array client-side and saving it in one
+  `PATCH`, which is adequate for a PM iterating on a template but would want
+  revisiting if templates grow large enough that whole-blueprint saves
+  become unwieldy.
 - Redis/BullMQ are referenced in code structure but not provisioned in this
   environment; background jobs run inline (synchronously) for now, which is
   fine for seed/demo volume but must move to a real queue before production

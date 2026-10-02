@@ -83,17 +83,60 @@ tests pass against a real Postgres database and its critical failure modes
   submission; content that doesn't match its claimed type is rejected;
   uploading to a non-upload field type is rejected; a file belonging to
   another organization 404s on download.
+- **Project templates**: a blueprint with a dangling phase/milestone/parent/
+  dependency key reference is rejected with `400` and a specific error list,
+  before it's ever persisted; a dependency cycle among template tasks is
+  rejected the same way; instantiating a template creates real `Project`/
+  `ProjectPhase`/`Milestone`/`Task` rows with every key reference resolved to
+  a real id and every `*OffsetDays` field turned into a real date relative to
+  the given start date (asserted down to the exact date, not just "a date
+  exists"); updating a template re-validates the *merged* blueprint; deleting
+  a template leaves already-instantiated projects completely intact;
+  instantiating a template for a client in a different organization 404s.
+- **Phases, milestones, and project members**: full phase CRUD plus
+  reordering (rejects a reorder call whose id set doesn't exactly match the
+  project's current phases); completing a milestone stamps `completedAt`,
+  un-completing clears it; adding a project member rejects a duplicate and a
+  user who isn't an org member at all; phases are tenant-isolated the same
+  way every other project sub-resource is.
+- **Deliverables and traceability**: deliverable updates enforce optimistic
+  concurrency (`409` on a stale `version`); linking a requirement rejects a
+  duplicate link and a requirement that belongs to a *different* project;
+  the project traceability view correctly separates deliverables-with-their-
+  linked-requirements-and-tasks from requirements not yet linked to
+  anything; deliverables are tenant-isolated.
+- **Task detail, subtasks, and comments**: task detail includes resolved
+  subtask and dependency data (a blocking task's title and status, not just
+  its id); deleting a task is a soft delete (it drops off the project's task
+  list immediately); a task comment can only be deleted by its own author
+  (someone else gets `403`).
+- **Project activity and dashboard**: real activity events are recorded for
+  project/task/milestone/deliverable mutations and are readable in order;
+  every number on the project dashboard (task-status breakdown, overdue-task
+  list, deliverable-status breakdown, waiting-on-client items) is checked
+  against a fixture with a known, hand-computed answer — never just "a number
+  came back" — so a regression that silently returns `0` or a wrong count
+  would fail the test, not just a regression that returns nothing at all.
+- **Client portal project dashboard**: milestones and deliverables render in
+  full; a task's title/description only appears in the response when that
+  task is `CLIENT_VISIBLE` — an internal task's title is asserted *absent*
+  from the response body, not just unrendered — while both kinds of task
+  still count toward the real `progress.totalTasks`/`doneTasks` numbers; a
+  portal user for Client A gets `404` and an empty list for Client B's
+  project in the same organization; a `VIEWER` portal role can read the
+  dashboard (read is universal) but the matrix still gates `edit`/`upload`
+  elsewhere the way Phase 2's tests already covered.
 
 ## Current results (last full run)
 
 | Suite | Count | Status |
 |---|---|---|
-| `packages/shared` unit (Vitest) | 42 | ✅ passing |
+| `packages/shared` unit (Vitest) | 49 | ✅ passing |
 | `apps/api` unit (Jest) | 15 | ✅ passing |
-| `apps/api` integration/e2e (Jest + Supertest + Postgres) | 65 | ✅ passing |
+| `apps/api` integration/e2e (Jest + Supertest + Postgres) | 88 | ✅ passing |
 | `apps/web` unit/component (Vitest + Testing Library) | 24 | ✅ passing |
 | `mobile/core-network` unit (JUnit 5 + MockWebServer) | 7 | ✅ passing |
-| **Total** | **153** | ✅ all passing |
+| **Total** | **183** | ✅ all passing |
 
 Also verified at last full run: `pnpm -r typecheck`, `pnpm -r lint`, and `pnpm -r build` all pass with zero errors and zero warnings across `packages/shared`, `packages/database`, `apps/api`, and `apps/web`.
 
@@ -130,21 +173,36 @@ production-like run.
 
 No automated Playwright suite exists in this repo yet (a prior version of
 this document claimed scaffolding at `apps/web/e2e/` — that directory never
-existed; this is the correction). What *was* done, by hand, for this phase's
-new UI: a real Chromium browser, driven by Playwright, against the actual
-dev servers (`pnpm dev:api` built + run, `pnpm dev:web`) and the actual
-database — not mocks. Two flows were walked end to end and asserted on real
-rendered DOM state: the full client-portal journey (accept a real invitation
-token read out of the `EmailLog` table → log in → see the assigned
-requirement on the dashboard → open it → fill a field → reload the page and
-confirm the answer persisted → sign out), and the staff-side CRM/onboarding/
-builder flow (create and edit a client through the UI, add a contact, start
-onboarding and mark a step done by clicking it, invite a portal user,
-build a custom form and add a field) plus the requirement review cycle and
-logo upload. All of it passed. The scripts themselves were throwaway
-verification, not committed — a real Playwright suite covering these flows
-is the natural next step so this verification doesn't have to be redone by
-hand next time; see "Known limitations" below.
+existed; this is the correction). What *was* done, by hand, for each
+phase's new UI: a real Chromium browser, driven by Playwright, against the
+actual dev servers and the actual database — not mocks. Phase 2 walked the
+full client-portal requirement-fill journey and the staff-side CRM/
+onboarding/builder flow end to end on real rendered DOM state (see the
+previous revision of this section for that detail — still accurate, not
+repeated here).
+
+**Phase 3's browser verification** covered the new project engine
+end to end: build a project template through the builder UI (add a phase,
+a milestone, and a task, each via its own dialog), save it, confirm no
+validation-error banner appears, instantiate it onto a new project, and
+confirm the instantiated project's Phases and Tasks tabs actually show the
+phase and task that came from the template — not just that instantiation
+returned `201`. Separately: open a task's detail dialog from the board,
+edit its description, post a comment and see it render, close the dialog,
+go to the Phases tab and add a phase/milestone and mark the milestone
+complete, and visit every new tab (Timeline, Calendar, Workload, Activity,
+Overview, Members, Deliverables) and confirm each renders without a
+JavaScript page error. Separately again, and most security-sensitive: a
+full client-portal accept-invite flow through the real UI (reading the
+invite token out of the `EmailLog` table, same as Phase 2's pattern),
+landing on the portal dashboard, opening the shared project, and asserting
+on live DOM that a `CLIENT_VISIBLE` task's title is rendered while a
+plain `INTERNAL` task's title is *not present anywhere in the page* —
+the same assertion the e2e test makes at the HTTP-response level, now
+also confirmed at the rendered-page level. All of it passed. As before,
+these scripts were throwaway verification, not committed — see "Known
+limitations" below for why a real, committed Playwright suite is still the
+recommended next step rather than re-deriving this by hand indefinitely.
 
 ## Known limitations (honest status, not "minor known bugs")
 

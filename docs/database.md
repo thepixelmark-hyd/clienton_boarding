@@ -16,12 +16,16 @@ PostgreSQL 16, managed through Prisma (`packages/database/prisma/schema.prisma`)
   reads default to `deletedAt: null` via the repository layer. Hard deletion
   is a platform-admin-only operation, not exposed in the app.
 - **Concurrency**: mutable collaborative records (`Client`, `Contact`, `Task`,
-  `Requirement`, `Project`) carry `version Int @default(1)`. Updates require
-  the client to send the version it last read; a mismatch returns `409
-  CONFLICT` rather than silently overwriting (§92). On `Requirement`
-  specifically, `version` also drives `RequirementVersion` (below): every
-  version bump snapshots the prior state, so this field is both an
-  optimistic-concurrency guard and a history pointer.
+  `Requirement`, `Project`, `Deliverable`) carry `version Int @default(1)`.
+  Updates require the client to send the version it last read; a mismatch
+  returns `409 CONFLICT` rather than silently overwriting (§92). On
+  `Requirement` specifically, `version` also drives `RequirementVersion`
+  (below): every version bump snapshots the prior state, so this field is
+  both an optimistic-concurrency guard and a history pointer. `ProjectPhase`
+  and `Milestone` deliberately do *not* carry `version` — low-contention
+  records (one PM plans a project's phases, not a team editing concurrently)
+  where the added friction of a version field isn't worth it; see
+  `ProjectsService`.
 - **Audit**: `createdAt`, `updatedAt` on every model; sensitive mutations
   additionally write an `AuditLog` row (actor, entity, action, before/after
   diff) — see `security.md`.
@@ -43,12 +47,31 @@ PostgreSQL 16, managed through Prisma (`packages/database/prisma/schema.prisma`)
 - `ClientOnboardingItem` — one row per step for a client's onboarding
   checklist, instantiated from a code-defined catalog
   (`packages/shared/src/onboarding.ts`) the same way form templates work
+- `ProjectTemplate` — a reusable blueprint (phases/milestones/tasks, stored
+  as JSON arrays keyed by an author-chosen `key` string rather than child
+  rows — see architecture.md "Project templates") that
+  `ProjectTemplatesService.instantiate` resolves into real `Project`/
+  `ProjectPhase`/`Milestone`/`Task` rows in one transaction. `Project.
+  sourceTemplateId` (nullable, `onDelete: SetNull`) remembers which template
+  a project came from, same "remember the origin, never block on it
+  existing" relationship as `Form.templateKey`.
 - `Project`, `ProjectMember`, `ProjectPhase`, `Milestone`
-- `Task` (self-relation `parentTaskId` for subtasks), `TaskDependency`
-- `Deliverable`, `DeliverableRequirement` (join table realizing the
-  requirement→deliverable traceability spine — modeled, but nothing in this
-  phase's application code populates it outside of seed data; see
-  architecture.md "Known gaps")
+- `ProjectActivityEvent` — an append-only, human-readable feed (project
+  created, task moved to Done, milestone completed, deliverable created, a
+  requirement linked, ...) written alongside the mutation that caused it,
+  distinct from `AuditLog`'s generic before/after diff — see
+  `ProjectActivityService`.
+- `Task` (self-relation `parentTaskId` for subtasks; `waitingOnClient` +
+  `waitingOnClientNote` flag a task that's stalled on something only the
+  client can provide — orthogonal to `status`, since a task can be
+  `IN_PROGRESS` *and* waiting on the client at once), `TaskDependency`
+- `Deliverable` (now carries `version` for optimistic concurrency and an
+  optional `dueDate`), `DeliverableRequirement` (join table realizing the
+  requirement→deliverable half of the traceability spine) — both halves of
+  the spine are now populated by real application code, not just seed data:
+  `DeliverablesService` manages the requirement link, and `Task.
+  deliverableId` (already modeled) is set directly through the existing task
+  create/update endpoints. See `architecture.md` "The traceability spine."
 - `Form` (`isTemplate` marks a reusable org-level template authored via the
   form builder, as opposed to a project/client-scoped instance;
   `conflictRules` JSON — copied from its template at instantiation — drives

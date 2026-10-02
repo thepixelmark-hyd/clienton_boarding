@@ -173,7 +173,15 @@ async function main() {
   async function ensureTask(
     projectId: string,
     title: string,
-    opts: { status?: "TODO" | "IN_PROGRESS" | "IN_REVIEW" | "DONE"; dueInDays?: number; assigneeId?: string; deliverableId?: string } = {},
+    opts: {
+      status?: "TODO" | "IN_PROGRESS" | "IN_REVIEW" | "DONE";
+      dueInDays?: number;
+      assigneeId?: string;
+      deliverableId?: string;
+      visibility?: "INTERNAL" | "CLIENT_VISIBLE";
+      waitingOnClient?: boolean;
+      waitingOnClientNote?: string;
+    } = {},
   ) {
     const existing = await prisma.task.findFirst({ where: { projectId, title } });
     if (existing) return existing;
@@ -185,21 +193,179 @@ async function main() {
         status: opts.status ?? "TODO",
         assigneeId: opts.assigneeId,
         deliverableId: opts.deliverableId,
+        visibility: opts.visibility ?? "INTERNAL",
+        waitingOnClient: opts.waitingOnClient ?? false,
+        waitingOnClientNote: opts.waitingOnClientNote,
         dueDate: opts.dueInDays !== undefined ? new Date(Date.now() + opts.dueInDays * 86_400_000) : undefined,
       },
     });
   }
 
   await ensureTask(brandProject.id, "Competitor logo audit", { status: "DONE", assigneeId: designer.id, deliverableId: logoDeliverable.id });
-  await ensureTask(brandProject.id, "Logo concept exploration", { status: "IN_REVIEW", assigneeId: designer.id, dueInDays: -2, deliverableId: logoDeliverable.id });
+  await ensureTask(brandProject.id, "Logo concept exploration", {
+    status: "IN_REVIEW",
+    assigneeId: designer.id,
+    dueInDays: -2,
+    deliverableId: logoDeliverable.id,
+    waitingOnClient: true,
+    waitingOnClientNote: "Sent three concepts for sign-off; need a pick before refinement starts.",
+  });
   await ensureTask(brandProject.id, "Brand guideline document", { status: "TODO", assigneeId: designer.id, dueInDays: 10 });
 
   await ensureTask(websiteProject.id, "Information architecture", { status: "DONE", assigneeId: pm.id });
-  await ensureTask(websiteProject.id, "Homepage wireframes", { status: "IN_PROGRESS", assigneeId: designer.id, dueInDays: 5, deliverableId: homepageDeliverable.id });
+  await ensureTask(websiteProject.id, "Homepage wireframes", {
+    status: "IN_PROGRESS",
+    assigneeId: designer.id,
+    dueInDays: 5,
+    deliverableId: homepageDeliverable.id,
+    visibility: "CLIENT_VISIBLE",
+  });
   await ensureTask(websiteProject.id, "Accessibility review", { status: "TODO", dueInDays: 20 });
 
   await ensureTask(marketingProject.id, "Campaign brief", { status: "TODO", assigneeId: pm.id, dueInDays: 3 });
   await ensureTask(appProject.id, "Feature scoping workshop", { status: "TODO", dueInDays: 15 });
+
+  // Homepage Design is "sent for the client's review" — this is what makes
+  // it show up under the portal's "Waiting on you" section (see
+  // ProjectsService.getPortalDetail) and under the internal dashboard's
+  // "waiting on client" widget for the brand/logo deliverable's sibling.
+  await prisma.deliverable.update({ where: { id: homepageDeliverable.id }, data: { status: "IN_REVIEW" } });
+
+  // ---------------------------------------------------------------------
+  // Phase 3: a reusable project template, and a project instantiated from
+  // it — demonstrating the full "template -> real phases/milestones/tasks"
+  // path, not just the template catalog sitting unused.
+  // ---------------------------------------------------------------------
+  const templateBlueprint = {
+    phases: [
+      { key: "discovery", name: "Discovery", order: 0, startOffsetDays: 0, endOffsetDays: 10 },
+      { key: "design", name: "Design", order: 1, startOffsetDays: 11, endOffsetDays: 25 },
+      { key: "build", name: "Build & launch", order: 2, startOffsetDays: 26, endOffsetDays: 45 },
+    ],
+    milestones: [
+      { key: "kickoff", name: "Kickoff complete", phaseKey: "discovery", dueOffsetDays: 3 },
+      { key: "design-approved", name: "Design approved", phaseKey: "design", dueOffsetDays: 25 },
+      { key: "launch", name: "Site live", phaseKey: "build", dueOffsetDays: 45 },
+    ],
+    tasks: [
+      { key: "brief", title: "Collect creative brief", phaseKey: "discovery", milestoneKey: "kickoff", priority: "HIGH" as const, dueOffsetDays: 3 },
+      { key: "wireframes", title: "Wireframes", phaseKey: "design", dependsOnKeys: ["brief"], dueOffsetDays: 18 },
+      { key: "visual-design", title: "Visual design", phaseKey: "design", milestoneKey: "design-approved", dependsOnKeys: ["wireframes"], dueOffsetDays: 25 },
+      { key: "build-site", title: "Build site", phaseKey: "build", dependsOnKeys: ["visual-design"], dueOffsetDays: 40 },
+      { key: "qa", title: "QA pass", phaseKey: "build", parentKey: "build-site", dueOffsetDays: 43 },
+      { key: "launch-task", title: "Launch", phaseKey: "build", milestoneKey: "launch", dependsOnKeys: ["build-site"], dueOffsetDays: 45 },
+    ],
+  };
+
+  let template = await prisma.projectTemplate.findFirst({
+    where: { organizationId: org.id, name: "Website Redesign — Standard" },
+  });
+  if (!template) {
+    template = await prisma.projectTemplate.create({
+      data: {
+        organizationId: org.id,
+        name: "Website Redesign — Standard",
+        description: "The default phase/milestone/task plan Meridian runs for a mid-sized marketing website rebuild.",
+        phases: templateBlueprint.phases as never,
+        milestones: templateBlueprint.milestones as never,
+        tasks: templateBlueprint.tasks as never,
+      },
+    });
+  }
+
+  let templatedProject = await prisma.project.findFirst({
+    where: { organizationId: org.id, sourceTemplateId: template.id },
+  });
+  if (!templatedProject) {
+    const templateStart = new Date();
+    const addDays = (days: number | undefined) => (days === undefined ? undefined : new Date(templateStart.getTime() + days * 86_400_000));
+
+    templatedProject = await prisma.project.create({
+      data: {
+        organizationId: org.id,
+        clientId: clients["digital-fiber"].id,
+        name: "Digital Fiber Website Rebuild",
+        type: "Website",
+        status: "ACTIVE",
+        sourceTemplateId: template.id,
+        startDate: templateStart,
+      },
+    });
+    await prisma.projectMember.create({ data: { projectId: templatedProject.id, userId: pm.id, role: "LEAD" } });
+
+    const phaseIdByKey = new Map<string, string>();
+    for (const phase of templateBlueprint.phases) {
+      const created = await prisma.projectPhase.create({
+        data: {
+          projectId: templatedProject.id,
+          name: phase.name,
+          order: phase.order,
+          startDate: addDays(phase.startOffsetDays),
+          endDate: addDays(phase.endOffsetDays),
+        },
+      });
+      phaseIdByKey.set(phase.key, created.id);
+    }
+    const milestoneIdByKey = new Map<string, string>();
+    for (const milestone of templateBlueprint.milestones) {
+      const created = await prisma.milestone.create({
+        data: {
+          projectId: templatedProject.id,
+          phaseId: phaseIdByKey.get(milestone.phaseKey),
+          name: milestone.name,
+          dueDate: addDays(milestone.dueOffsetDays),
+        },
+      });
+      milestoneIdByKey.set(milestone.key, created.id);
+    }
+    const taskIdByKey = new Map<string, string>();
+    for (const t of templateBlueprint.tasks) {
+      const created = await prisma.task.create({
+        data: {
+          organizationId: org.id,
+          projectId: templatedProject.id,
+          title: t.title,
+          milestoneId: t.milestoneKey ? milestoneIdByKey.get(t.milestoneKey) : undefined,
+          priority: t.priority ?? "MEDIUM",
+          dueDate: addDays(t.dueOffsetDays),
+        },
+      });
+      taskIdByKey.set(t.key, created.id);
+    }
+    for (const t of templateBlueprint.tasks) {
+      const taskId = taskIdByKey.get(t.key)!;
+      if ("parentKey" in t && t.parentKey) {
+        await prisma.task.update({ where: { id: taskId }, data: { parentTaskId: taskIdByKey.get(t.parentKey) } });
+      }
+      if ("dependsOnKeys" in t && t.dependsOnKeys?.length) {
+        await prisma.taskDependency.createMany({
+          data: t.dependsOnKeys.map((depKey) => ({ dependentTaskId: taskId, blockingTaskId: taskIdByKey.get(depKey)! })),
+        });
+      }
+    }
+
+    await prisma.projectActivityEvent.create({
+      data: {
+        organizationId: org.id,
+        projectId: templatedProject.id,
+        type: "PROJECT_TEMPLATE_INSTANTIATED",
+        title: `Project created from template "${template.name}"`,
+        actorUserId: pm.id,
+      },
+    });
+  }
+
+  // A few more activity events on the flagship brand project so the
+  // Activity tab has a realistic history to show, not just one row.
+  async function ensureActivity(projectId: string, type: string, title: string, actorUserId?: string) {
+    const existing = await prisma.projectActivityEvent.findFirst({ where: { projectId, type, title } });
+    if (existing) return;
+    await prisma.projectActivityEvent.create({ data: { organizationId: org.id, projectId, type, title, actorUserId } });
+  }
+  await ensureActivity(brandProject.id, "PROJECT_CREATED", "Project created: Brand Identity Refresh", pm.id);
+  await ensureActivity(brandProject.id, "DELIVERABLE_CREATED", "Deliverable created: Logo Design", pm.id);
+  await ensureActivity(brandProject.id, "TASK_STATUS_CHANGED", 'Task "Competitor logo audit" moved to DONE', designer.id);
+  await ensureActivity(brandProject.id, "TASK_STATUS_CHANGED", 'Task "Logo concept exploration" moved to IN_REVIEW', designer.id);
 
   // ---------------------------------------------------------------------
   // Requirements: a fully-answered, READY logo questionnaire for the brand

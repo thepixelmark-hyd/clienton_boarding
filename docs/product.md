@@ -45,13 +45,13 @@ able to answer, at any time:
 This is enforced in the data model (`Deliverable.requirementLinks`,
 `Task.deliverableId`) rather than left to convention — see `database.md`.
 
-## Scope delivered in this engineering phase
+## Scope delivered across phases 1–3
 
-This is a from-scratch build (the repository was empty at the start of this
-phase). Given the size of the full specification (146 numbered requirement
+This is a from-scratch build (the repository was empty at the start of
+Phase 1). Given the size of the full specification (146 numbered requirement
 sections spanning web, a native Android app, email/WhatsApp/meeting
 integrations, a visual automation engine, AI copilot, billing, and a platform
-admin console), this phase intentionally builds a **real, working, tested
+admin console), these phases intentionally build a **real, working, tested
 vertical slice** rather than a shallow pass across every surface. Everything
 listed below is fully functional — authenticated, authorized, persisted, and
 tested — not a mock.
@@ -96,8 +96,25 @@ tested — not a mock.
   client-portal invitations and requirement-submitted notices — delivers for
   real once SMTP credentials are configured, logs to an inspectable
   `EmailLog` table otherwise (see `security.md` "Email").
-- Projects: phases, milestones, tasks, list + board views, computed project
-  health with evidence.
+- **Project engine (Phase 3)**: reusable project templates (phases/
+  milestones/tasks blueprint, authored and edited through a real builder UI,
+  validated server-side against dangling references and dependency cycles
+  before it can be saved) that instantiate into a real project in one step;
+  full phase and milestone management (create/edit/reorder/delete, milestone
+  completion); subtasks and task dependencies with cycle detection; task
+  comments; project member assignment with roles; deliverables with
+  optimistic concurrency, linked to the requirements they satisfy and the
+  tasks that build them — the requirement→deliverable→task traceability
+  spine is now populated by real application code, not just seed data; five
+  project views (list, Kanban board, a CSS-only timeline, a month calendar,
+  and a workload-by-assignee view); computed project health (already
+  existed) plus a genuine project dashboard whose every statistic is a real
+  database aggregate, never a placeholder; an append-only project activity
+  feed; a "waiting on client" state (orthogonal to task status) surfaced
+  both internally and to the client; and a client-portal project dashboard
+  — milestones and deliverables in full, tasks filtered to only the ones
+  marked client-visible, real progress numbers, and a "waiting on you"
+  section for deliverables awaiting their review and open requirements.
 - Android application foundation: auth, session, navigation, and theming —
   see `architecture.md` "Mobile (Android) architecture". Project/requirement
   screens on Android are still Phase 8, not this phase.
@@ -113,18 +130,21 @@ half-implemented, per the project's own "no partial implementation" rule —
 these are documented as the next engineering phases in `architecture.md`
 rather than shipped as broken UI):
 
-- The requirement→deliverable traceability spine's actual linking (the data
-  model supports it; no application code populates it outside seed data —
-  see `architecture.md` "Known gaps").
-- Creative proofing/annotation canvas, an S3-compatible production storage
-  backend (local-disk works today; see `architecture.md`), signed URLs for
-  it.
+- Creative proofing/annotation canvas, a deliverable approval workflow UI
+  (`Approval` remains schema-only — no controller/service exists for it
+  yet), an S3-compatible production storage backend (local-disk works
+  today; see `architecture.md`), signed URLs for it. (The
+  requirement→deliverable→task traceability spine's *linking* — the part
+  this list used to flag as not built — is now real application code as of
+  Phase 3; see "Delivered" above.)
 - Gmail/Outlook inbox integration, WhatsApp Business, calendar/meeting
   integrations. (Outbound transactional email itself — invitations,
   submission notices — is now built; see "Delivered" above.)
 - Visual automation engine, AI project copilot, AI requirement analysis.
 - Billing/subscription management, platform admin console, feature flags.
-- Resource management, time tracking UI, financial reporting.
+- Resource management (an org-wide, cross-project workload view — the
+  per-project workload view is now built; see "Delivered" above), time
+  tracking UI, financial reporting.
 - Project/task/requirement screens on the Android app (the auth/session/nav
   foundation is built; see "Delivered" above).
 

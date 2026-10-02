@@ -50,6 +50,7 @@ export type Resource =
   | "member"
   | "client"
   | "project"
+  | "projectTemplate"
   | "task"
   | "requirement"
   | "deliverable"
@@ -83,6 +84,7 @@ const FULL_ACCESS: Record<Resource, Action[]> = {
   member: ALL_ACTIONS,
   client: ALL_ACTIONS,
   project: ALL_ACTIONS,
+  projectTemplate: ALL_ACTIONS,
   task: ALL_ACTIONS,
   requirement: ALL_ACTIONS,
   deliverable: ALL_ACTIONS,
@@ -99,6 +101,7 @@ export const organizationPermissionMatrix: Record<OrgRole, Record<Resource, Acti
     member: ["view", "invite"],
     client: ["view", "create", "edit", "comment"],
     project: ["view", "create", "edit", "manage", "comment"],
+    projectTemplate: ["view", "create", "edit", "delete"],
     task: ["view", "create", "edit", "delete", "comment"],
     requirement: ["view", "create", "edit", "comment"],
     deliverable: ["view", "create", "edit", "approve", "comment"],
@@ -111,6 +114,7 @@ export const organizationPermissionMatrix: Record<OrgRole, Record<Resource, Acti
     member: ["view"],
     client: ["view", "comment"],
     project: ["view", "create", "edit", "manage", "comment"],
+    projectTemplate: ["view", "create", "edit", "delete"],
     task: ["view", "create", "edit", "delete", "comment"],
     requirement: ["view", "create", "edit", "comment"],
     deliverable: ["view", "create", "edit", "approve", "comment"],
@@ -123,6 +127,7 @@ export const organizationPermissionMatrix: Record<OrgRole, Record<Resource, Acti
     member: ["view"],
     client: ["view", "create", "edit", "comment", "invite"],
     project: ["view", "comment"],
+    projectTemplate: ["view"],
     task: ["view", "comment"],
     requirement: ["view", "comment"],
     deliverable: ["view", "comment"],
@@ -135,6 +140,7 @@ export const organizationPermissionMatrix: Record<OrgRole, Record<Resource, Acti
     member: ["view"],
     client: ["view"],
     project: ["view", "comment"],
+    projectTemplate: ["view"],
     task: ["view", "create", "edit", "comment"],
     requirement: ["view", "comment"],
     deliverable: ["view", "comment"],
@@ -147,6 +153,7 @@ export const organizationPermissionMatrix: Record<OrgRole, Record<Resource, Acti
     member: ["view"],
     client: ["view"],
     project: ["view", "comment"],
+    projectTemplate: ["view"],
     task: ["view", "edit", "comment"],
     requirement: ["view", "comment"],
     deliverable: ["view", "comment"],
@@ -159,6 +166,7 @@ export const organizationPermissionMatrix: Record<OrgRole, Record<Resource, Acti
     member: [],
     client: ["view"],
     project: ["view", "comment"],
+    projectTemplate: [],
     task: ["view", "edit", "comment"],
     requirement: ["view"],
     deliverable: ["view", "comment"],
@@ -171,6 +179,7 @@ export const organizationPermissionMatrix: Record<OrgRole, Record<Resource, Acti
     member: ["view"],
     client: ["view"],
     project: ["view"],
+    projectTemplate: ["view"],
     task: ["view"],
     requirement: ["view"],
     deliverable: ["view"],
@@ -183,6 +192,7 @@ export const organizationPermissionMatrix: Record<OrgRole, Record<Resource, Acti
     member: ["view"],
     client: ["view"],
     project: ["view"],
+    projectTemplate: ["view"],
     task: ["view"],
     requirement: ["view"],
     deliverable: ["view"],

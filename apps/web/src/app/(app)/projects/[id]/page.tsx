@@ -1,21 +1,34 @@
 "use client";
 
+import { useState } from "react";
 import { useParams } from "next/navigation";
+import { LayoutGrid, List as ListIcon } from "lucide-react";
 import { useProject } from "@/lib/projects";
 import { PageHeader } from "@/components/page-header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatusBadge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ErrorState, EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/empty-state";
 import { Card, CardContent } from "@/components/ui/card";
 import { AvatarGroup } from "@/components/ui/avatar";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { TaskBoard } from "@/components/project/task-board";
+import { TaskList } from "@/components/project/task-list";
 import { RequirementsTab } from "@/components/project/requirements-tab";
+import { PhasesTab } from "@/components/project/phases-tab";
+import { DeliverablesTab } from "@/components/project/deliverables-tab";
+import { MembersTab } from "@/components/project/members-tab";
+import { ProjectTimeline } from "@/components/project/project-timeline";
+import { ProjectCalendar } from "@/components/project/project-calendar";
+import { ProjectWorkload } from "@/components/project/project-workload";
+import { ProjectActivity } from "@/components/project/project-activity";
+import { ProjectDashboard } from "@/components/project/project-dashboard";
 
 export default function ProjectDetailPage() {
   const params = useParams<{ id: string }>();
   const { data: project, isLoading, isError, refetch } = useProject(params.id);
+  const [taskView, setTaskView] = useState<"board" | "list">("board");
 
   if (isLoading) {
     return (
@@ -48,20 +61,20 @@ export default function ProjectDetailPage() {
       />
 
       <Tabs defaultValue="overview" className="mt-6">
-        <TabsList>
+        <TabsList className="flex-nowrap overflow-x-auto">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="tasks">Tasks</TabsTrigger>
+          <TabsTrigger value="phases">Phases</TabsTrigger>
+          <TabsTrigger value="deliverables">Deliverables</TabsTrigger>
+          <TabsTrigger value="timeline">Timeline</TabsTrigger>
+          <TabsTrigger value="calendar">Calendar</TabsTrigger>
+          <TabsTrigger value="workload">Workload</TabsTrigger>
+          <TabsTrigger value="members">Members</TabsTrigger>
+          <TabsTrigger value="activity">Activity</TabsTrigger>
           <TabsTrigger value="requirements">Requirements</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="mt-4 space-y-4">
-          <Card>
-            <CardContent className="py-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-text-muted">Health</p>
-              <p className="mt-1 text-sm text-text-primary">{project.health.reason}</p>
-            </CardContent>
-          </Card>
-
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <Card>
               <CardContent className="py-4">
@@ -87,48 +100,57 @@ export default function ProjectDetailPage() {
             </Card>
           </div>
 
-          <div>
-            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-muted">Milestones</h3>
-            {project.milestones.length === 0 ? (
-              <EmptyState title="No milestones yet" />
-            ) : (
-              <div className="space-y-2">
-                {project.milestones.map((m) => (
-                  <Card key={m.id}>
-                    <CardContent className="flex items-center justify-between py-3">
-                      <span className="text-sm text-text-primary">{m.name}</span>
-                      <div className="flex items-center gap-3">
-                        <span className="text-xs text-text-muted">Due {formatDate(m.dueDate)}</span>
-                        <StatusBadge status={m.status} />
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div>
-            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-muted">Deliverables</h3>
-            {project.deliverables.length === 0 ? (
-              <EmptyState title="No deliverables yet" />
-            ) : (
-              <div className="space-y-2">
-                {project.deliverables.map((d) => (
-                  <Card key={d.id}>
-                    <CardContent className="flex items-center justify-between py-3">
-                      <span className="text-sm text-text-primary">{d.name}</span>
-                      <StatusBadge status={d.status} />
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </div>
+          <ProjectDashboard projectId={project.id} />
         </TabsContent>
 
         <TabsContent value="tasks" className="mt-4">
-          <TaskBoard projectId={project.id} />
+          <div className="mb-3 flex justify-end gap-1">
+            <Button
+              size="sm"
+              variant={taskView === "board" ? "secondary" : "ghost"}
+              onClick={() => setTaskView("board")}
+              className={cn(taskView === "board" && "border border-border-strong")}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" /> Board
+            </Button>
+            <Button
+              size="sm"
+              variant={taskView === "list" ? "secondary" : "ghost"}
+              onClick={() => setTaskView("list")}
+              className={cn(taskView === "list" && "border border-border-strong")}
+            >
+              <ListIcon className="h-3.5 w-3.5" /> List
+            </Button>
+          </div>
+          {taskView === "board" ? <TaskBoard projectId={project.id} /> : <TaskList projectId={project.id} />}
+        </TabsContent>
+
+        <TabsContent value="phases" className="mt-4">
+          <PhasesTab projectId={project.id} />
+        </TabsContent>
+
+        <TabsContent value="deliverables" className="mt-4">
+          <DeliverablesTab projectId={project.id} />
+        </TabsContent>
+
+        <TabsContent value="timeline" className="mt-4">
+          <ProjectTimeline projectId={project.id} />
+        </TabsContent>
+
+        <TabsContent value="calendar" className="mt-4">
+          <ProjectCalendar projectId={project.id} />
+        </TabsContent>
+
+        <TabsContent value="workload" className="mt-4">
+          <ProjectWorkload projectId={project.id} />
+        </TabsContent>
+
+        <TabsContent value="members" className="mt-4">
+          <MembersTab projectId={project.id} />
+        </TabsContent>
+
+        <TabsContent value="activity" className="mt-4">
+          <ProjectActivity projectId={project.id} />
         </TabsContent>
 
         <TabsContent value="requirements" className="mt-4">

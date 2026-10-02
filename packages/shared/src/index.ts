@@ -5,6 +5,8 @@ export * from "./clients";
 export * from "./onboarding";
 export * from "./portal";
 export * from "./projects";
+export * from "./projectTemplates";
+export * from "./comments";
 export * from "./forms/rule";
 export * from "./forms/conflict";
 export * from "./forms/readiness";

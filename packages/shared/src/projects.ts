@@ -44,6 +44,8 @@ export const createTaskSchema = z.object({
   estimatedHours: z.number().nonnegative().optional(),
   billable: z.boolean().optional(),
   dependsOnTaskIds: z.array(z.string()).optional(),
+  waitingOnClient: z.boolean().optional(),
+  waitingOnClientNote: z.string().max(1000).optional(),
 });
 export type CreateTaskInput = z.infer<typeof createTaskSchema>;
 
@@ -60,6 +62,84 @@ export const createMilestoneSchema = z.object({
   dueDate: z.string().datetime().optional(),
 });
 export type CreateMilestoneInput = z.infer<typeof createMilestoneSchema>;
+
+export const milestoneStatusSchema = z.enum(["PENDING", "IN_PROGRESS", "COMPLETED", "MISSED"]);
+
+export const updateMilestoneSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  phaseId: z.string().nullable().optional(),
+  dueDate: z.string().datetime().nullable().optional(),
+  status: milestoneStatusSchema.optional(),
+});
+export type UpdateMilestoneInput = z.infer<typeof updateMilestoneSchema>;
+
+// -----------------------------------------------------------------------
+// Phases
+// -----------------------------------------------------------------------
+
+export const createPhaseSchema = z.object({
+  name: z.string().min(1).max(200),
+  order: z.number().int().optional(),
+  startDate: z.string().datetime().optional(),
+  endDate: z.string().datetime().optional(),
+});
+export type CreatePhaseInput = z.infer<typeof createPhaseSchema>;
+
+export const updatePhaseSchema = createPhaseSchema.partial();
+export type UpdatePhaseInput = z.infer<typeof updatePhaseSchema>;
+
+export const reorderPhasesSchema = z.object({
+  orderedIds: z.array(z.string().min(1)).min(1),
+});
+export type ReorderPhasesInput = z.infer<typeof reorderPhasesSchema>;
+
+// -----------------------------------------------------------------------
+// Project members (assignments)
+// -----------------------------------------------------------------------
+
+export const projectMemberRoleSchema = z.enum(["LEAD", "CONTRIBUTOR", "OBSERVER"]);
+
+export const addProjectMemberSchema = z.object({
+  userId: z.string().min(1),
+  role: projectMemberRoleSchema.optional(),
+});
+export type AddProjectMemberInput = z.infer<typeof addProjectMemberSchema>;
+
+export const updateProjectMemberSchema = z.object({
+  role: projectMemberRoleSchema,
+});
+export type UpdateProjectMemberInput = z.infer<typeof updateProjectMemberSchema>;
+
+// -----------------------------------------------------------------------
+// Deliverables
+// -----------------------------------------------------------------------
+
+export const deliverableStatusSchema = z.enum([
+  "NOT_STARTED",
+  "IN_PROGRESS",
+  "IN_REVIEW",
+  "APPROVED",
+  "DELIVERED",
+]);
+
+export const createDeliverableSchema = z.object({
+  name: z.string().min(1).max(200),
+  description: z.string().max(4000).optional(),
+  acceptanceCriteria: z.string().max(4000).optional(),
+  dueDate: z.string().datetime().optional(),
+});
+export type CreateDeliverableInput = z.infer<typeof createDeliverableSchema>;
+
+export const updateDeliverableSchema = createDeliverableSchema.partial().extend({
+  status: deliverableStatusSchema.optional(),
+  version: z.number().int().positive(),
+});
+export type UpdateDeliverableInput = z.infer<typeof updateDeliverableSchema>;
+
+export const linkDeliverableRequirementSchema = z.object({
+  requirementId: z.string().min(1),
+});
+export type LinkDeliverableRequirementInput = z.infer<typeof linkDeliverableRequirementSchema>;
 
 // -----------------------------------------------------------------------
 // Project health — computed from evidence, never a bare color (product.md §24)

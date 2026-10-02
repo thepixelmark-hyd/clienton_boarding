@@ -17,6 +17,7 @@ import { saveResponsesSchema, type SaveResponsesInput } from "@clientos/shared";
 import { ClientsService } from "../clients/clients.service";
 import { FormsService } from "../forms/forms.service";
 import { FormsUploadService } from "../forms/forms-upload.service";
+import { ProjectsService } from "../projects/projects.service";
 import { Public } from "../common/decorators/public.decorator";
 import { Errors } from "../common/errors";
 import { ZodValidationPipe } from "../common/pipes/zod-validation.pipe";
@@ -45,7 +46,20 @@ export class PortalController {
     private readonly clientsService: ClientsService,
     private readonly formsService: FormsService,
     private readonly formsUploadService: FormsUploadService,
+    private readonly projectsService: ProjectsService,
   ) {}
+
+  @Get("projects")
+  @RequirePortalPermission("view", "project")
+  listProjects(@CurrentPortal() portal: PortalContext) {
+    return this.projectsService.listForPortal(portal.organizationId, portal.clientId);
+  }
+
+  @Get("projects/:projectId")
+  @RequirePortalPermission("view", "project")
+  getProject(@CurrentPortal() portal: PortalContext, @Param("projectId") projectId: string) {
+    return this.projectsService.getPortalDetail(portal.organizationId, portal.clientId, projectId);
+  }
 
   @Get("onboarding")
   @RequirePortalPermission("view", "onboarding")

@@ -106,3 +106,44 @@ export function usePortalSubmitForm(formId: string, submissionId: string) {
     },
   });
 }
+
+// -----------------------------------------------------------------------
+// Project dashboard — client-safe subset only, see ProjectsService.getPortalDetail
+// -----------------------------------------------------------------------
+
+export interface PortalProjectSummary {
+  id: string;
+  name: string;
+  status: string;
+  startDate: string | null;
+  targetEndDate: string | null;
+  health: { status: string; reason: string };
+}
+
+export interface PortalProjectDetail {
+  project: { id: string; name: string; description: string | null; status: string; startDate: string | null; targetEndDate: string | null };
+  health: { status: string; reason: string };
+  milestones: { id: string; name: string; dueDate: string | null; status: string }[];
+  deliverables: { id: string; name: string; status: string; dueDate: string | null }[];
+  visibleTasks: { id: string; title: string; status: string; dueDate: string | null }[];
+  progress: { totalTasks: number; doneTasks: number };
+  waitingOnYou: {
+    deliverablesInReview: { id: string; name: string }[];
+    openRequirementCount: number;
+  };
+}
+
+export function usePortalProjects() {
+  return useQuery({
+    queryKey: ["portal", "projects"],
+    queryFn: () => api.get<PortalProjectSummary[]>("/portal/projects"),
+  });
+}
+
+export function usePortalProject(projectId: string) {
+  return useQuery({
+    queryKey: ["portal", "projects", projectId],
+    queryFn: () => api.get<PortalProjectDetail>(`/portal/projects/${projectId}`),
+    enabled: !!projectId,
+  });
+}

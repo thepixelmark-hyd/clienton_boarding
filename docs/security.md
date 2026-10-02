@@ -58,6 +58,14 @@
   can never reach a staff route; each guard checks its own named cookie only
   and `@RequirePortalAuth()`/`@Public()` are both applied per route to keep
   the two boundaries from leaking into each other.
+- **The portal's project dashboard enforces `Task.visibility` server-side**,
+  not as a UI-only filter: `ProjectsService.getPortalDetail`'s query for
+  `visibleTasks` has `visibility: "CLIENT_VISIBLE"` baked into its `where`
+  clause, so an internal task's title/description is never present in the
+  HTTP response body in the first place — there's no "the frontend just
+  doesn't render it" gap for a client to bypass by reading the network tab.
+  Milestones and deliverables have no such filter because they're
+  inherently client-facing records, not internal planning detail.
 
 ## Authorization
 
@@ -75,6 +83,16 @@
   sufficient org-level role can read any project regardless of project
   assignment. See `docs/architecture-assessment.md` §8/§21 (risk #3) for
   the fix, prioritized ahead of calling the Projects phase complete.
+- **Project permissions** (new this phase): `Resource` gained a
+  `projectTemplate` entry in `organizationPermissionMatrix` — managing
+  reusable project templates is treated as an org-configuration action
+  (`OPERATIONS_MANAGER`/`PROJECT_MANAGER`/`ADMIN`/`OWNER` can create/edit/
+  delete; every other role can view) rather than inventing a parallel
+  permission system. Phases, milestones, and project-member assignment are
+  deliberately *not* separate resources — they're sub-objects of a project,
+  so they're authorized under the existing `project` resource's `edit`/
+  `manage` actions, the same way a `Milestone` was already created under
+  `project`'s `edit` action before this phase.
 - **Client portal permissions**: `clientPortalPermissionMatrix` in
   `packages/shared/src/roles.ts` is resource-aware (`requirement`,
   `onboarding`, `project`, `deliverable`, `invoice`, `team`), checked by

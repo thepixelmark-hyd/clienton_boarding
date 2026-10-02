@@ -70,6 +70,12 @@ const STATUS_CONFIG: Record<string, { label: string; variant: BadgeProps["varian
   STAKEHOLDER: { label: "Stakeholder", variant: "neutral" },
   VIEWER: { label: "Viewer", variant: "neutral" },
   BILLING_CONTACT: { label: "Billing contact", variant: "neutral" },
+  APPROVED: { label: "Approved", variant: "success" },
+  DELIVERED: { label: "Delivered", variant: "success" },
+  MISSED: { label: "Missed", variant: "danger" },
+  LEAD: { label: "Lead", variant: "accent" },
+  CONTRIBUTOR: { label: "Contributor", variant: "neutral" },
+  OBSERVER: { label: "Observer", variant: "neutral" },
 };
 
 export function StatusBadge({ status, className }: { status: string; className?: string }) {

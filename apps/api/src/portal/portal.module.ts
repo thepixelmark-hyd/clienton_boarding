@@ -6,9 +6,10 @@ import { PortalPermissionsGuard } from "./portal-permissions.guard";
 import { AuditModule } from "../audit/audit.module";
 import { ClientsModule } from "../clients/clients.module";
 import { FormsModule } from "../forms/forms.module";
+import { ProjectsModule } from "../projects/projects.module";
 
 @Module({
-  imports: [AuditModule, ClientsModule, FormsModule],
+  imports: [AuditModule, ClientsModule, FormsModule, ProjectsModule],
   controllers: [PortalAuthController, PortalController],
   providers: [PortalAuthService, PortalPermissionsGuard],
 })

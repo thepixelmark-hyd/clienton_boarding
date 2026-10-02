@@ -1,8 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { LogOut, CheckCircle2, Circle, FileText } from "lucide-react";
-import { usePortalMe, usePortalLogout, usePortalOnboarding, usePortalRequirements } from "@/lib/portal";
+import { LogOut, CheckCircle2, Circle, FileText, FolderKanban } from "lucide-react";
+import { usePortalMe, usePortalLogout, usePortalOnboarding, usePortalProjects, usePortalRequirements } from "@/lib/portal";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/badge";
@@ -12,6 +12,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 export default function PortalDashboardPage() {
   const router = useRouter();
   const { data: me, isLoading: loadingMe } = usePortalMe();
+  const { data: projects, isLoading: loadingProjects } = usePortalProjects();
   const { data: onboarding, isLoading: loadingOnboarding } = usePortalOnboarding();
   const { data: requirements, isLoading: loadingRequirements } = usePortalRequirements();
   const logout = usePortalLogout();
@@ -33,6 +34,36 @@ export default function PortalDashboardPage() {
       </div>
 
       <section className="mt-6">
+        <h2 className="mb-3 text-sm font-semibold text-text-secondary">Projects</h2>
+        {loadingProjects ? (
+          <Skeleton className="h-24 w-full" />
+        ) : !projects || projects.length === 0 ? (
+          <EmptyState icon={FolderKanban} title="No projects yet" description="Projects your agency starts with you will appear here." />
+        ) : (
+          <div className="space-y-2">
+            {projects.map((project) => (
+              <Card
+                key={project.id}
+                className="cursor-pointer transition-colors hover:border-border-strong"
+                onClick={() => router.push(`/portal/projects/${project.id}`)}
+              >
+                <CardContent className="flex items-center justify-between py-3.5">
+                  <div>
+                    <p className="text-sm font-medium text-text-primary">{project.name}</p>
+                    <p className="text-xs text-text-muted">{project.health.reason}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <StatusBadge status={project.status} />
+                    <StatusBadge status={project.health.status} />
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="mt-8">
         <h2 className="mb-3 text-sm font-semibold text-text-secondary">Onboarding</h2>
         {loadingOnboarding ? (
           <Skeleton className="h-24 w-full" />

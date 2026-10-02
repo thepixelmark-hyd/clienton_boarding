@@ -61,6 +61,17 @@ separate, more permissive global limit (300/60s).
 Field mutations are rejected with `400` once any submission exists against a
 non-template form — see `architecture.md`.
 
+## Project templates
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | /project-templates | session | |
+| POST | /project-templates | session (role: create:projectTemplate) | Blueprint (phases/milestones/tasks) is validated server-side — a dangling key reference or a dependency cycle is rejected with `400` before it's saved |
+| GET | /project-templates/:id | session | |
+| PATCH | /project-templates/:id | session | Replaces the whole blueprint in one call; re-validated the same way |
+| DELETE | /project-templates/:id | session | Projects already created from it are unaffected (`Project.sourceTemplateId` is set `null`, nothing cascades) |
+| POST | /project-templates/:id/instantiate | session (role: create:project) | Resolves every blueprint key into a real `Project`/`ProjectPhase`/`Milestone`/`Task` row in one transaction, with offset-day fields turned into real dates relative to the given (or default: today) start date |
+
 ## Projects / Tasks
 
 | Method | Path | Auth | Description |
@@ -69,9 +80,40 @@ non-template form — see `architecture.md`.
 | POST | /projects | session | |
 | GET | /projects/:id | session, object check | Includes computed `health` |
 | PATCH | /projects/:id | session, version check | |
+| GET | /projects/:id/dashboard | session | Real aggregates only: task-status breakdown, overdue tasks, upcoming milestones, deliverable-status breakdown, waiting-on-client items — never placeholder numbers |
+| GET | /projects/:id/activity | session | Latest 50 `ProjectActivityEvent` rows, newest first |
+| GET | /projects/:id/phases | session | |
+| POST | /projects/:id/phases | session | |
+| PATCH | /projects/:id/phases/:phaseId | session | |
+| DELETE | /projects/:id/phases/:phaseId | session | Milestones in the phase are unassigned (`phaseId: null`), not deleted |
+| PATCH | /projects/:id/phases-order | session | Reorders all phases in one call |
+| PATCH | /projects/:id/milestones/:milestoneId | session | Setting `status: "COMPLETED"` stamps `completedAt`; moving off `COMPLETED` clears it |
+| DELETE | /projects/:id/milestones/:milestoneId | session | |
+| GET | /projects/:id/members | session | |
+| POST | /projects/:id/members | session (role: manage:project) | |
+| PATCH | /projects/:id/members/:userId | session (role: manage:project) | Change role (LEAD/CONTRIBUTOR/OBSERVER) |
+| DELETE | /projects/:id/members/:userId | session (role: manage:project) | |
 | GET | /projects/:id/tasks | session | |
 | POST | /projects/:id/tasks | session | |
+| GET | /tasks/:id | session | Full detail: subtasks, dependencies (with blocking task title/status), comment count, parent task/deliverable/milestone names |
 | PATCH | /tasks/:id | session, version check | |
+| DELETE | /tasks/:id | session | Soft delete |
+| GET | /tasks/:id/comments | session | |
+| POST | /tasks/:id/comments | session (role: comment:task) | |
+| DELETE | /tasks/:id/comments/:commentId | session | Only the comment's own author |
+
+## Deliverables and traceability
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | /projects/:id/deliverables | session | |
+| POST | /projects/:id/deliverables | session | |
+| GET | /deliverables/:id | session | Includes linked tasks and linked requirements |
+| PATCH | /deliverables/:id | session, version check | |
+| DELETE | /deliverables/:id | session | Soft delete |
+| POST | /deliverables/:id/requirements | session | Links a `Requirement` — rejected if the requirement belongs to a different project |
+| DELETE | /deliverables/:id/requirements/:requirementId | session | |
+| GET | /projects/:id/traceability | session | The full Requirement → Deliverable → Task chain for the project, plus requirements not yet linked to any deliverable |
 
 ## Requirements
 
@@ -114,6 +156,8 @@ the same org must not reach each other's data.
 | POST | /portal/auth/logout | none | |
 | GET | /portal/auth/me | portal session | Current portal user + their client |
 | POST | /portal/auth/invitations/:token/accept | none | Accepts a `ClientInvitation`, creates the `ClientPortalUser`, logs in |
+| GET | /portal/projects | portal session | This client's projects, each with computed `health` |
+| GET | /portal/projects/:projectId | portal session | Client-safe detail: milestones and deliverables in full, only `CLIENT_VISIBLE` tasks (the rest count toward `progress` only), real progress numbers, and a "waiting on you" section (deliverables in `IN_REVIEW`, open requirement count) |
 | GET | /portal/onboarding | portal session | This client's onboarding checklist (read-only) |
 | GET | /portal/requirements | portal session | Submissions (draft + submitted) assigned to this client, each with its `Requirement` data once one exists |
 | GET | /portal/forms/:formId/submissions/:submissionId | portal session | |

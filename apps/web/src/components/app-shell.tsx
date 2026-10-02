@@ -8,6 +8,7 @@ import {
   FileText,
   FolderKanban,
   LayoutDashboard,
+  LayoutTemplate,
   LogOut,
   Menu,
   Moon,
@@ -23,6 +24,7 @@ const NAV_ITEMS = [
   { href: "/", label: "Home", icon: LayoutDashboard },
   { href: "/clients", label: "Clients", icon: Building2 },
   { href: "/projects", label: "Projects", icon: FolderKanban },
+  { href: "/project-templates", label: "Templates", icon: LayoutTemplate },
   { href: "/forms", label: "Forms", icon: FileText },
   { href: "/team", label: "Team", icon: Users },
 ];

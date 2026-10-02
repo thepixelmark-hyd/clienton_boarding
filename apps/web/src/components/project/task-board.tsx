@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { Plus } from "lucide-react";
+import { Link2, ListChecks, MessageSquare, Plus } from "lucide-react";
 import { useTasks, useCreateTask, useUpdateTask, type TaskItem } from "@/lib/projects";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogFooter } from "@/components/ui/dialog";
 import { Field } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -15,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { formatDate, cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
 import { ApiClientError } from "@/lib/api-client";
+import { TaskDetailDialog } from "./task-detail-dialog";
 
 const COLUMNS: { status: TaskItem["status"]; label: string }[] = [
   { status: "TODO", label: "To do" },
@@ -35,6 +37,7 @@ export function TaskBoard({ projectId }: { projectId: string }) {
   const { data: tasks, isLoading, isError, refetch } = useTasks(projectId);
   const updateTask = useUpdateTask(projectId);
   const [createOpen, setCreateOpen] = useState(false);
+  const [openTaskId, setOpenTaskId] = useState<string | null>(null);
 
   if (isLoading) {
     return (
@@ -74,7 +77,11 @@ export function TaskBoard({ projectId }: { projectId: string }) {
               </div>
               <div className="space-y-2">
                 {columnTasks.map((task) => (
-                  <Card key={task.id} className="shadow-none">
+                  <Card
+                    key={task.id}
+                    className="cursor-pointer shadow-none transition-colors hover:border-border-strong"
+                    onClick={() => setOpenTaskId(task.id)}
+                  >
                     <CardContent className="space-y-2 py-3">
                       <div className="flex items-start gap-1.5">
                         <span className={cn("mt-1 h-1.5 w-1.5 shrink-0 rounded-full", PRIORITY_COLOR[task.priority])} />
@@ -82,13 +89,40 @@ export function TaskBoard({ projectId }: { projectId: string }) {
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-text-muted">{task.dueDate ? formatDate(task.dueDate) : ""}</span>
-                        {task.assignee && <Avatar name={task.assignee.fullName} size="sm" />}
+                        {task.assignee && <Avatar name={task.assignee.fullName} imageUrl={task.assignee.avatarUrl} size="sm" />}
                       </div>
+                      {(task.subtasks.length > 0 || task.dependenciesFrom.length > 0 || task._count.comments > 0) && (
+                        <div className="flex items-center gap-2 text-[10px] text-text-muted">
+                          {task.subtasks.length > 0 && (
+                            <span className="inline-flex items-center gap-0.5">
+                              <ListChecks className="h-3 w-3" /> {task.subtasks.length}
+                            </span>
+                          )}
+                          {task.dependenciesFrom.length > 0 && (
+                            <span className="inline-flex items-center gap-0.5">
+                              <Link2 className="h-3 w-3" /> {task.dependenciesFrom.length}
+                            </span>
+                          )}
+                          {task._count.comments > 0 && (
+                            <span className="inline-flex items-center gap-0.5">
+                              <MessageSquare className="h-3 w-3" /> {task._count.comments}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      {task.waitingOnClient && (
+                        <Badge variant="warning" className="w-fit">
+                          Waiting on client
+                        </Badge>
+                      )}
                       <div className="flex flex-wrap gap-1 pt-1">
                         {COLUMNS.filter((c) => c.status !== task.status).map((c) => (
                           <button
                             key={c.status}
-                            onClick={() => moveTask(task, c.status)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              moveTask(task, c.status);
+                            }}
                             className="rounded-sm border border-border px-1.5 py-0.5 text-[10px] text-text-muted hover:border-border-strong hover:text-text-primary"
                           >
                             → {c.label}
@@ -105,6 +139,12 @@ export function TaskBoard({ projectId }: { projectId: string }) {
       </div>
 
       <CreateTaskDialog projectId={projectId} open={createOpen} onOpenChange={setCreateOpen} />
+      <TaskDetailDialog
+        taskId={openTaskId}
+        projectId={projectId}
+        open={!!openTaskId}
+        onOpenChange={(v) => !v && setOpenTaskId(null)}
+      />
     </div>
   );
 }
