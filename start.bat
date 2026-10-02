@@ -146,7 +146,27 @@ if not exist "node_modules" (
 )
 echo.
 
-REM ---- 7. Prisma client + migrations -------------------------------------
+REM ---- 7. Build the shared workspace packages ----------------------------
+REM @clientos/shared and @clientos/database both resolve to a compiled
+REM dist/ folder (their package.json "main" field), which is gitignored and
+REM so does not exist on a fresh clone. The api/web dev servers only
+REM transpile their OWN source on the fly, not these workspace
+REM dependencies' - without this they fail immediately with
+REM "Module not found: Can't resolve '@clientos/shared'" (or /database).
+REM Re-run every time, not just on first install, so pulling new commits
+REM that change these packages doesn't leave a stale dist/ behind.
+echo Building shared workspace packages...
+%PNPM% --filter @clientos/shared build
+%PNPM% --filter @clientos/database build
+if errorlevel 1 (
+  echo [ERROR] Building @clientos/shared or @clientos/database failed.
+  echo         See the error above.
+  pause
+  exit /b 1
+)
+echo.
+
+REM ---- 8. Prisma client + migrations -------------------------------------
 echo Generating the Prisma client and applying database migrations...
 %PNPM% db:generate
 %PNPM% db:migrate:deploy
@@ -158,12 +178,12 @@ if errorlevel 1 (
 )
 echo.
 
-REM ---- 8. Seed demo data (safe to re-run) --------------------------------
+REM ---- 9. Seed demo data (safe to re-run) --------------------------------
 echo Seeding demo data...
 %PNPM% db:seed
 echo.
 
-REM ---- 9. Launch the API and Web dev servers in their own windows --------
+REM ---- 10. Launch the API and Web dev servers in their own windows -------
 echo Starting the API and Web dev servers...
 start "ClientOS API" cmd /k "cd /d "%~dp0" && %PNPM% dev:api"
 start "ClientOS Web" cmd /k "cd /d "%~dp0" && %PNPM% dev:web"
