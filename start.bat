@@ -19,6 +19,7 @@ echo  ClientOS - starting local dev environment
 echo ============================================
 echo.
 
+echo Checking for Node.js...
 REM ---- 1. Node.js -----------------------------------------------------
 where node >nul 2>nul
 if errorlevel 1 (
@@ -27,29 +28,29 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
+echo   found.
+echo.
 
-REM ---- 2. pnpm (via corepack, matches the version pinned in package.json) ----
-where pnpm >nul 2>nul
+REM ---- 2. pnpm -----------------------------------------------------------
+REM Deliberately NOT using whatever "pnpm" command (if any) is already on
+REM this machine's PATH: a corepack-managed pnpm shim can be broken (points
+REM at a path missing .cmd/.exe) or, worse, point at a mapped network drive
+REM that isn't currently connected, which can hang for a long time instead
+REM of failing fast. Running pnpm through npx instead only depends on the
+REM Node.js install just confirmed above, nothing else on this machine.
+echo Setting up pnpm via npx - this may need a moment to download it on
+echo first run...
+set PNPM=call npx --yes pnpm@12.8.1
+%PNPM% --version
 if errorlevel 1 (
-  echo pnpm not found - enabling it via corepack...
-  call corepack enable
-  call corepack prepare pnpm@12.8.1 --activate
+  echo [ERROR] Could not run pnpm via npx. Check your internet connection
+  echo         and that npm/npx works at all ^(try "npx --version"^).
+  pause
+  exit /b 1
 )
+echo.
 
-REM Some Windows + corepack combinations produce a pnpm.cmd shim that is
-REM found on PATH but fails when actually run (a known corepack bug - the
-REM generated shim points at a path with no .cmd/.exe extension). Self-test
-REM it and fall back to running pnpm through npx, which only needs the
-REM Node.js install already confirmed above, not corepack's shim.
-set PNPM=call pnpm
-pnpm --version >nul 2>nul
-if errorlevel 1 (
-  echo The "pnpm" command found on PATH doesn't run correctly on this
-  echo machine ^(a known corepack/Windows shim issue^) - using
-  echo "npx pnpm@12.8.1" instead for the rest of this script.
-  set PNPM=call npx --yes pnpm@12.8.1
-)
-
+echo Checking for Docker...
 REM ---- 3. Docker Desktop ------------------------------------------------
 where docker >nul 2>nul
 if errorlevel 1 (
@@ -67,6 +68,8 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
+echo   found and running.
+echo.
 
 set COMPOSE_CMD=docker compose
 docker compose version >nul 2>nul
