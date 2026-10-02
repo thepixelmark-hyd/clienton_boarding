@@ -1,4 +1,16 @@
 @echo off
+
+REM Double-clicking a .bat file runs it via "cmd /c", which closes the
+REM window the instant the script ends - including a crash, which means
+REM any error (even one this script doesn't explicitly catch) flashes by
+REM too fast to read. Relaunch once inside "cmd /k" instead, which keeps
+REM the window open at a prompt no matter how the script below finishes.
+if not defined CLIENTOS_RELAUNCHED (
+  set CLIENTOS_RELAUNCHED=1
+  cmd /k call "%~f0"
+  exit /b
+)
+
 setlocal
 cd /d "%~dp0"
 
