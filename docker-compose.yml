@@ -7,7 +7,7 @@
 # This does not run migrations for you. Before the api container will serve
 # anything but connection errors, apply the schema once against this
 # Postgres (from the host, with packages/database's DATABASE_URL pointed at
-# localhost:5432 as above):
+# localhost:5433 as above):
 #   pnpm --filter @clientos/database migrate:deploy
 name: clientos
 
@@ -19,7 +19,14 @@ services:
       POSTGRES_PASSWORD: clientos_dev_password
       POSTGRES_DB: clientos_dev
     ports:
-      - "5432:5432"
+      # Host side deliberately isn't the Postgres default (5432) - that's
+      # the single most common port conflict on a dev machine (a natively
+      # installed Postgres service, another project's compose stack, etc.),
+      # and this project's own containers still reach it at postgres:5432
+      # over the Docker network either way (DATABASE_URL below is
+      # unaffected). Only host tools (psql, the apps run via `pnpm dev:*`,
+      # Prisma from the host) need the 5433 host port.
+      - "5433:5432"
     volumes:
       - clientos_postgres_data:/var/lib/postgresql/data
     healthcheck:

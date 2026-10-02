@@ -58,7 +58,18 @@ REM         so file changes hot-reload instead of waiting on a Docker rebuild) -
 echo Starting the Postgres container...
 %COMPOSE_CMD% up -d postgres
 if errorlevel 1 (
-  echo [ERROR] Failed to start the Postgres container. See the error above.
+  echo.
+  echo [ERROR] Failed to start the Postgres container - see the Docker error above.
+  echo.
+  echo If it says a port is "already allocated" or "already in use", something
+  echo else on your machine is already listening on that port - most often a
+  echo PostgreSQL service installed directly on Windows and set to start
+  echo automatically. Find what's using it with:
+  echo     netstat -ano ^| findstr :5433
+  echo then either stop that process/service, or open docker-compose.yml and
+  echo change the postgres "5433:5432" port mapping to a free port on your
+  echo machine ^(and update DATABASE_URL in packages\database\.env, apps\api\.env
+  echo and .env.example to match^).
   pause
   exit /b 1
 )
