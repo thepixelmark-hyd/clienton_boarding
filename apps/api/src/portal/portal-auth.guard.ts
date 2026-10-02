@@ -45,9 +45,19 @@ export class PortalAuthGuard implements CanActivate {
     const tokenHash = hashToken(token);
     const session = await this.prisma.client.clientPortalSession.findUnique({
       where: { tokenHash },
-      include: { clientPortalUser: true },
+      include: { clientPortalUser: { include: { client: { select: { deletedAt: true } } } } },
     });
-    const invalid = !session || session.revokedAt !== null || session.expiresAt.getTime() < Date.now();
+    // A client that's been offboarded (soft-deleted) must lose portal access
+    // immediately, not just drop off the staff-side client list — checked
+    // here (not only at login) so an already-open session from before the
+    // deletion is cut off on its very next request, the same way a revoked
+    // or expired session already is. See portal-auth.service.ts's login()
+    // for the matching check at sign-in time.
+    const invalid =
+      !session ||
+      session.revokedAt !== null ||
+      session.expiresAt.getTime() < Date.now() ||
+      session.clientPortalUser.client.deletedAt !== null;
 
     if (invalid || !session) {
       if (requiresPortalAuth) throw Errors.unauthenticated();

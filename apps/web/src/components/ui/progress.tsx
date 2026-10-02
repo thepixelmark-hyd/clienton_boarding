@@ -1,6 +1,16 @@
 import { cn } from "@/lib/utils";
 
-export function Progress({ value, className, variant = "accent" }: { value: number; className?: string; variant?: "accent" | "success" | "warning" | "danger" }) {
+export function Progress({
+  value,
+  className,
+  variant = "accent",
+  label,
+}: {
+  value: number;
+  className?: string;
+  variant?: "accent" | "success" | "warning" | "danger";
+  label: string;
+}) {
   const clamped = Math.max(0, Math.min(100, value));
   return (
     <div className={cn("h-1.5 w-full overflow-hidden rounded-full bg-surface-secondary", className)}>
@@ -16,6 +26,7 @@ export function Progress({ value, className, variant = "accent" }: { value: numb
         aria-valuenow={clamped}
         aria-valuemin={0}
         aria-valuemax={100}
+        aria-label={label}
       />
     </div>
   );

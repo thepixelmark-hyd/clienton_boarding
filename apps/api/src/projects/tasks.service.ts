@@ -138,7 +138,6 @@ export class TasksService {
   async update(organizationId: string, actorUserId: string, id: string, input: UpdateTaskInput) {
     const existing = await this.prisma.client.task.findFirst({ where: { id, organizationId, deletedAt: null } });
     if (!existing) throw Errors.notFound("Task");
-    if (existing.version !== input.version) throw Errors.conflictVersion();
 
     if (input.dependsOnTaskIds) {
       for (const blockingTaskId of input.dependsOnTaskIds) {
@@ -155,8 +154,8 @@ export class TasksService {
 
     const { version: _version, dependsOnTaskIds, ...rest } = input;
     const updated = await this.prisma.client.$transaction(async (tx) => {
-      const task = await tx.task.update({
-        where: { id },
+      const { count } = await tx.task.updateMany({
+        where: { id, version: input.version },
         data: {
           ...rest,
           startDate: rest.startDate ? new Date(rest.startDate) : undefined,
@@ -164,6 +163,8 @@ export class TasksService {
           version: { increment: 1 },
         },
       });
+      if (count === 0) throw Errors.conflictVersion();
+      const task = await tx.task.findUniqueOrThrow({ where: { id } });
       if (dependsOnTaskIds) {
         await tx.taskDependency.deleteMany({ where: { dependentTaskId: id } });
         if (dependsOnTaskIds.length) {

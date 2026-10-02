@@ -76,7 +76,12 @@ export default function PortalProjectDetailPage() {
               {progress.doneTasks} of {progress.totalTasks} tasks complete
             </p>
           </div>
-          <Progress value={progressPct} className="mt-2" variant="success" />
+          <Progress
+            value={progressPct}
+            className="mt-2"
+            variant="success"
+            label={`Project progress: ${progress.doneTasks} of ${progress.totalTasks} tasks complete`}
+          />
         </CardContent>
       </Card>
 

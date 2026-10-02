@@ -156,10 +156,10 @@ export default function FormBuilderPage() {
                 </div>
                 {!locked && (
                   <div className="flex gap-1">
-                    <Button size="icon" variant="ghost" onClick={() => setEditingField(field)}>
+                    <Button size="icon" variant="ghost" onClick={() => setEditingField(field)} aria-label={`Edit ${field.label}`}>
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
-                    <Button size="icon" variant="ghost" onClick={() => setDeletingFieldId(field.id)}>
+                    <Button size="icon" variant="ghost" onClick={() => setDeletingFieldId(field.id)} aria-label={`Delete ${field.label}`}>
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>

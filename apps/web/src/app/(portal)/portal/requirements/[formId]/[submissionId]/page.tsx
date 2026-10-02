@@ -104,7 +104,12 @@ export default function PortalRequirementFillPage() {
               <span>{readiness.missingFields.length} required field{readiness.missingFields.length === 1 ? "" : "s"} remaining</span>
             )}
           </div>
-          <Progress value={readiness.completionPercent} className="mt-1.5" variant={readiness.completionPercent === 100 ? "success" : "accent"} />
+          <Progress
+            value={readiness.completionPercent}
+            className="mt-1.5"
+            variant={readiness.completionPercent === 100 ? "success" : "accent"}
+            label={`Form completion: ${readiness.completionPercent}%`}
+          />
         </div>
       )}
 

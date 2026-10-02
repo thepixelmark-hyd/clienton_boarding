@@ -121,11 +121,10 @@ export class ProjectsService {
       where: { id, organizationId, deletedAt: null },
     });
     if (!existing) throw Errors.notFound("Project");
-    if (existing.version !== input.version) throw Errors.conflictVersion();
 
     const { version: _version, ...rest } = input;
-    const updated = await this.prisma.client.project.update({
-      where: { id },
+    const { count } = await this.prisma.client.project.updateMany({
+      where: { id, version: input.version },
       data: {
         ...rest,
         startDate: rest.startDate ? new Date(rest.startDate) : undefined,
@@ -133,6 +132,8 @@ export class ProjectsService {
         version: { increment: 1 },
       },
     });
+    if (count === 0) throw Errors.conflictVersion();
+    const updated = await this.prisma.client.project.findUniqueOrThrow({ where: { id } });
 
     if (input.status && input.status !== existing.status) {
       await this.activity.record({

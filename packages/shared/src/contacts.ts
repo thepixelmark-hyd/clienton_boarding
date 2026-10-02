@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { emailSchema } from "./auth";
 
 export const CONTACT_ROLES = [
   "DECISION_MAKER",
@@ -16,7 +17,7 @@ export type ContactRole = (typeof CONTACT_ROLES)[number];
 
 export const createContactSchema = z.object({
   fullName: z.string().min(1).max(200),
-  email: z.string().email(),
+  email: emailSchema,
   phone: z.string().max(40).optional(),
   title: z.string().max(120).optional(),
   role: z.enum(CONTACT_ROLES).optional(),

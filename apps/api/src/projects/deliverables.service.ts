@@ -86,17 +86,18 @@ export class DeliverablesService {
       where: { id, organizationId, deletedAt: null },
     });
     if (!existing) throw Errors.notFound("Deliverable");
-    if (existing.version !== input.version) throw Errors.conflictVersion();
 
     const { version: _version, ...rest } = input;
-    const updated = await this.prisma.client.deliverable.update({
-      where: { id },
+    const { count } = await this.prisma.client.deliverable.updateMany({
+      where: { id, version: input.version },
       data: {
         ...rest,
         dueDate: rest.dueDate === undefined ? undefined : rest.dueDate ? new Date(rest.dueDate) : null,
         version: { increment: 1 },
       },
     });
+    if (count === 0) throw Errors.conflictVersion();
+    const updated = await this.prisma.client.deliverable.findUniqueOrThrow({ where: { id } });
 
     if (input.status && input.status !== existing.status) {
       await this.activity.record({

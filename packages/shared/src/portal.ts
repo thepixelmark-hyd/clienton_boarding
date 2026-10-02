@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { CLIENT_PORTAL_ROLES } from "./roles";
+import { emailSchema } from "./auth";
 
 const passwordSchema = z
   .string()
@@ -10,13 +11,13 @@ const passwordSchema = z
   });
 
 export const portalLoginSchema = z.object({
-  email: z.string().email(),
+  email: emailSchema,
   password: z.string().min(1),
 });
 export type PortalLoginInput = z.infer<typeof portalLoginSchema>;
 
 export const inviteClientPortalUserSchema = z.object({
-  email: z.string().email(),
+  email: emailSchema,
   role: z.enum(CLIENT_PORTAL_ROLES),
   contactId: z.string().min(1).optional(),
 });

@@ -150,7 +150,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const signOut = () => logout.mutate(undefined, { onSuccess: () => router.replace("/login") });
 
   return (
-    <div className="flex min-h-screen bg-background md:flex-row">
+    <div className="flex min-h-screen flex-col bg-background md:flex-row">
       {/* Desktop sidebar — always visible at md+ */}
       <aside className="hidden w-56 shrink-0 flex-col border-r border-border bg-surface md:flex">
         <SidebarContents

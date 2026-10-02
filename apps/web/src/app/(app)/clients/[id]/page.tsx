@@ -195,10 +195,20 @@ export default function ClientDetailPage() {
                       <StatusBadge status={contact.role} />
                       {contact.isDecisionMaker && <StatusBadge status="DECISION_MAKER" />}
                       {contact.isBillingContact && <StatusBadge status="BILLING" />}
-                      <Button size="icon" variant="ghost" onClick={() => setEditingContact(contact)}>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => setEditingContact(contact)}
+                        aria-label={`Edit ${contact.fullName}`}
+                      >
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
-                      <Button size="icon" variant="ghost" onClick={() => setDeletingContactId(contact.id)}>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => setDeletingContactId(contact.id)}
+                        aria-label={`Delete ${contact.fullName}`}
+                      >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>

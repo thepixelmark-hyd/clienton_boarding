@@ -115,17 +115,26 @@ export class ClientsService {
       where: { id, organizationId, deletedAt: null },
     });
     if (!existing) throw Errors.notFound("Client");
-    if (existing.version !== input.version) throw Errors.conflictVersion();
 
     const { version: _version, ...rest } = input;
-    const updated = await this.prisma.client.client.update({
-      where: { id },
+    // The version check has to live in the UPDATE's own WHERE clause, not a
+    // separate read-then-compare in application code — two concurrent
+    // requests can both pass a JS-level `existing.version !== input.version`
+    // check (both read the same pre-update version) and then both write,
+    // silently losing whichever update lands first. Folding the check into
+    // `updateMany`'s WHERE makes Postgres itself the arbiter: only the
+    // request whose expected version still matches the current row affects
+    // any rows at all (see docs/database.md "Concurrency").
+    const { count } = await this.prisma.client.client.updateMany({
+      where: { id, version: input.version },
       data: {
         ...rest,
         website: rest.website || undefined,
         version: { increment: 1 },
       },
     });
+    if (count === 0) throw Errors.conflictVersion();
+    const updated = await this.prisma.client.client.findUniqueOrThrow({ where: { id } });
 
     await this.audit.record({
       organizationId,
@@ -190,13 +199,14 @@ export class ClientsService {
       where: { id: contactId, clientId, organizationId, deletedAt: null },
     });
     if (!existing) throw Errors.notFound("Contact");
-    if (existing.version !== input.version) throw Errors.conflictVersion();
 
     const { version: _version, ...rest } = input;
-    const updated = await this.prisma.client.contact.update({
-      where: { id: contactId },
+    const { count } = await this.prisma.client.contact.updateMany({
+      where: { id: contactId, version: input.version },
       data: { ...rest, version: { increment: 1 } },
     });
+    if (count === 0) throw Errors.conflictVersion();
+    const updated = await this.prisma.client.contact.findUniqueOrThrow({ where: { id: contactId } });
 
     await this.audit.record({
       organizationId,

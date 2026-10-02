@@ -255,13 +255,24 @@ export default function ProjectTemplateDetailPage() {
         ) : (
           <div className="space-y-2">
             {tasks.map((task) => (
-              <Card
-                key={task.key}
-                className="cursor-pointer transition-colors hover:border-border-strong"
-                onClick={() => { setEditingTask(task); setTaskDialogOpen(true); }}
-              >
+              <Card key={task.key} className="transition-colors hover:border-border-strong">
                 <CardContent className="flex items-center justify-between py-3">
-                  <div>
+                  {/* Separate interactive region from the delete button below —
+                      see task-board.tsx's identical comment for why this can't
+                      just be onClick on the Card itself. */}
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    className="flex-1 cursor-pointer"
+                    onClick={() => { setEditingTask(task); setTaskDialogOpen(true); }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setEditingTask(task);
+                        setTaskDialogOpen(true);
+                      }
+                    }}
+                  >
                     <p className="text-sm font-medium text-text-primary">{task.title}</p>
                     <p className="text-xs text-text-muted">
                       {task.parentKey ? `Subtask of ${tasks.find((t) => t.key === task.parentKey)?.title ?? task.parentKey} · ` : ""}
@@ -271,7 +282,7 @@ export default function ProjectTemplateDetailPage() {
                   </div>
                   <button
                     type="button"
-                    onClick={(e) => { e.stopPropagation(); removeTask(task.key); }}
+                    onClick={() => removeTask(task.key)}
                     className="rounded-sm p-1.5 text-text-muted hover:bg-surface-secondary hover:text-danger"
                     aria-label={`Remove task ${task.title}`}
                   >

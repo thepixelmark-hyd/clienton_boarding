@@ -132,9 +132,28 @@
   raw string-interpolated SQL. The one raw-SQL usage (full-text search index
   creation, migrations) is static DDL, not user input.
 - React's default escaping + a strict `Content-Security-Policy` header
-  mitigate stored/reflected XSS; rich-text fields (requirement notes,
-  comments) are sanitized server-side (`sanitize-html` allow-list) before
-  storage, not just before render.
+  mitigate stored/reflected XSS. **Correction**: a previous version of this
+  document claimed rich-text fields (requirement notes, comments) are
+  sanitized server-side with a `sanitize-html` allow-list before storage —
+  no such package is installed and no sanitization code exists anywhere in
+  `apps/api/src`; that claim was never true. What actually protects these
+  fields today: every one of them is rendered in React as plain text (JSX's
+  default `{value}` interpolation, never `dangerouslySetInnerHTML` — audited
+  across `apps/web/src` to confirm; the only use of
+  `dangerouslySetInnerHTML` in the app is a static, hardcoded theme-init
+  script, not user content), so a stored `<script>` tag or event handler is
+  displayed as inert text rather than executed. The three transactional
+  email templates (`apps/api/src/email/templates/render.ts`) separately
+  HTML-escape every interpolated string before building the message, so the
+  same stored value can't become live markup there either. This is weaker
+  than true server-side sanitization in one respect: if a future feature
+  ever renders one of these fields outside React (a PDF export, a non-React
+  admin tool, a raw HTML email digest) without its own escaping, it would be
+  exposed — rendering-time escaping protects every *current* call site, not
+  every possible future one the way storage-time sanitization would. Adding
+  a real `sanitize-html` pass before storage is still worth doing before any
+  such feature ships, but it is not currently implemented, so this document
+  will not claim that it is.
 - `helmet` middleware sets standard secure headers
   (HSTS, X-Content-Type-Options, frame-ancestors, etc).
 - **CSRF**: `CsrfGuard` rejects any cookie-authenticated mutating request

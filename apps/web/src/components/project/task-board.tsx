@@ -77,52 +77,64 @@ export function TaskBoard({ projectId }: { projectId: string }) {
               </div>
               <div className="space-y-2">
                 {columnTasks.map((task) => (
-                  <Card
-                    key={task.id}
-                    className="cursor-pointer shadow-none transition-colors hover:border-border-strong"
-                    onClick={() => setOpenTaskId(task.id)}
-                  >
+                  <Card key={task.id} className="shadow-none transition-colors hover:border-border-strong">
                     <CardContent className="space-y-2 py-3">
-                      <div className="flex items-start gap-1.5">
-                        <span className={cn("mt-1 h-1.5 w-1.5 shrink-0 rounded-full", PRIORITY_COLOR[task.priority])} />
-                        <p className="text-sm font-medium leading-snug text-text-primary">{task.title}</p>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-text-muted">{task.dueDate ? formatDate(task.dueDate) : ""}</span>
-                        {task.assignee && <Avatar name={task.assignee.fullName} imageUrl={task.assignee.avatarUrl} size="sm" />}
-                      </div>
-                      {(task.subtasks.length > 0 || task.dependenciesFrom.length > 0 || task._count.comments > 0) && (
-                        <div className="flex items-center gap-2 text-[10px] text-text-muted">
-                          {task.subtasks.length > 0 && (
-                            <span className="inline-flex items-center gap-0.5">
-                              <ListChecks className="h-3 w-3" /> {task.subtasks.length}
-                            </span>
-                          )}
-                          {task.dependenciesFrom.length > 0 && (
-                            <span className="inline-flex items-center gap-0.5">
-                              <Link2 className="h-3 w-3" /> {task.dependenciesFrom.length}
-                            </span>
-                          )}
-                          {task._count.comments > 0 && (
-                            <span className="inline-flex items-center gap-0.5">
-                              <MessageSquare className="h-3 w-3" /> {task._count.comments}
-                            </span>
-                          )}
+                      {/* Only this inner region opens the task detail dialog — kept
+                          separate from the Card itself (rather than putting onClick
+                          directly on the Card, which would make it a focusable
+                          role="button" ancestor) so the quick-move buttons below
+                          aren't nested inside another interactive element, which
+                          screen readers treat as a broken/ambiguous control. */}
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        className="cursor-pointer space-y-2"
+                        onClick={() => setOpenTaskId(task.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            setOpenTaskId(task.id);
+                          }
+                        }}
+                      >
+                        <div className="flex items-start gap-1.5">
+                          <span className={cn("mt-1 h-1.5 w-1.5 shrink-0 rounded-full", PRIORITY_COLOR[task.priority])} />
+                          <p className="text-sm font-medium leading-snug text-text-primary">{task.title}</p>
                         </div>
-                      )}
-                      {task.waitingOnClient && (
-                        <Badge variant="warning" className="w-fit">
-                          Waiting on client
-                        </Badge>
-                      )}
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-text-muted">{task.dueDate ? formatDate(task.dueDate) : ""}</span>
+                          {task.assignee && <Avatar name={task.assignee.fullName} imageUrl={task.assignee.avatarUrl} size="sm" />}
+                        </div>
+                        {(task.subtasks.length > 0 || task.dependenciesFrom.length > 0 || task._count.comments > 0) && (
+                          <div className="flex items-center gap-2 text-[10px] text-text-muted">
+                            {task.subtasks.length > 0 && (
+                              <span className="inline-flex items-center gap-0.5">
+                                <ListChecks className="h-3 w-3" /> {task.subtasks.length}
+                              </span>
+                            )}
+                            {task.dependenciesFrom.length > 0 && (
+                              <span className="inline-flex items-center gap-0.5">
+                                <Link2 className="h-3 w-3" /> {task.dependenciesFrom.length}
+                              </span>
+                            )}
+                            {task._count.comments > 0 && (
+                              <span className="inline-flex items-center gap-0.5">
+                                <MessageSquare className="h-3 w-3" /> {task._count.comments}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        {task.waitingOnClient && (
+                          <Badge variant="warning" className="w-fit">
+                            Waiting on client
+                          </Badge>
+                        )}
+                      </div>
                       <div className="flex flex-wrap gap-1 pt-1">
                         {COLUMNS.filter((c) => c.status !== task.status).map((c) => (
                           <button
                             key={c.status}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              moveTask(task, c.status);
-                            }}
+                            onClick={() => moveTask(task, c.status)}
                             className="rounded-sm border border-border px-1.5 py-0.5 text-[10px] text-text-muted hover:border-border-strong hover:text-text-primary"
                           >
                             → {c.label}

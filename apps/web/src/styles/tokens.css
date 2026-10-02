@@ -17,18 +17,34 @@
 
   --text-primary: 220 20% 12%;
   --text-secondary: 220 10% 36%;
-  --text-muted: 220 8% 55%;
+  /* Was 55% lightness (~3.4:1 against white/surface) — failed WCAG AA's
+     4.5:1 minimum for normal-sized text, confirmed by an axe-core audit
+     against this design system's own small type (table headers, metadata
+     labels) at 11-12px. First pass landed on 46%, which cleared 4.5:1
+     against a plain white background but still failed (4.34:1) against
+     --surface-secondary, a second real background this color is used on
+     (e.g. the calendar's day-of-week header row) — found by re-running the
+     same audit against more pages, not assumed fixed after the first pass.
+     42% clears 4.5:1 against both with margin. */
+  --text-muted: 220 8% 42%;
 
   --accent: 221 63% 33%;
   --accent-foreground: 0 0% 100%;
 
   --success: 142 55% 30%;
   --success-foreground: 0 0% 100%;
-  --warning: 34 90% 40%;
+  /* Was 40% lightness: 3.28:1 against its own bg-warning/10 badge tint,
+     below the 4.5:1 minimum (same class of bug as --info above). 30%
+     clears it with margin. */
+  --warning: 34 90% 30%;
   --warning-foreground: 0 0% 100%;
   --danger: 4 68% 45%;
   --danger-foreground: 0 0% 100%;
-  --info: 199 65% 38%;
+  /* Was 38% lightness: passed against a plain white background (4.9:1) but
+     failed (4.15:1) against the actual rendered surface — StatusBadge's
+     `bg-info/10` tint, which is a slightly darker blended color than pure
+     white. 34% clears 4.5:1 against the tinted badge background too. */
+  --info: 199 65% 34%;
   --info-foreground: 0 0% 100%;
 
   --focus-ring: 221 83% 53%;

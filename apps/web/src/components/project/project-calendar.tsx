@@ -164,7 +164,12 @@ export function ProjectCalendar({ projectId }: { projectId: string }) {
                 <div
                   className={cn(
                     "mb-1 text-[11px]",
-                    cell.inCurrentMonth ? "text-text-secondary" : "text-text-muted/60",
+                    // Full-opacity text-muted (not a faded /60) — the faded
+                    // version dropped below WCAG AA's 4.5:1 for normal text
+                    // (confirmed by axe-core); the color difference from
+                    // text-secondary alone is enough to read as
+                    // de-emphasized without relying on low contrast to do it.
+                    cell.inCurrentMonth ? "text-text-secondary" : "text-text-muted",
                     cell.isToday && "font-semibold text-accent",
                   )}
                 >

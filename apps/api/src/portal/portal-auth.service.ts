@@ -45,11 +45,19 @@ export class PortalAuthService {
     const portalUser = await this.prisma.client.clientPortalUser.findFirst({
       where: { email: input.email },
       orderBy: { createdAt: "asc" },
+      include: { client: { select: { deletedAt: true } } },
     });
     if (!portalUser) throw Errors.invalidCredentials();
 
     const valid = await argon2.verify(portalUser.passwordHash, input.password).catch(() => false);
     if (!valid) throw Errors.invalidCredentials();
+
+    // An offboarded (soft-deleted) client's portal users must not be able to
+    // sign in at all — same rule PortalAuthGuard enforces for an
+    // already-open session, applied here so a freshly-attempted login gets
+    // a clean rejection instead of a cookie that would just 401 on the very
+    // next request.
+    if (portalUser.client.deletedAt !== null) throw Errors.invalidCredentials();
 
     const session = await this.issueSession(portalUser.id);
     await this.prisma.client.clientPortalUser.update({
