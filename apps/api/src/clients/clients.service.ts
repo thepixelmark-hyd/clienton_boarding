@@ -473,7 +473,7 @@ export class ClientsService {
       where: { id: organizationId },
       select: { name: true },
     });
-    const inviteUrl = `${process.env.WEB_APP_URL ?? "http://localhost:3000"}/portal/accept-invite?token=${rawToken}`;
+    const inviteUrl = `${process.env.WEB_APP_URL ?? "http://localhost:9003"}/portal/accept-invite?token=${rawToken}`;
     await this.email.sendClientPortalInvitation({
       to: input.email,
       organizationId,

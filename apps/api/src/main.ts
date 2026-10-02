@@ -26,7 +26,7 @@ async function bootstrap() {
     SwaggerModule.setup("api/docs", app, document);
   }
 
-  const port = process.env.API_PORT ?? 4000;
+  const port = process.env.API_PORT ?? 9004;
   await app.listen(port);
   Logger.log(`ClientOS API listening on port ${port}`, "Bootstrap");
 }

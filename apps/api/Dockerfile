@@ -46,5 +46,5 @@ COPY --from=build /repo/apps/api ./apps/api
 RUN groupadd --system clientos && useradd --system --gid clientos clientos
 USER clientos
 
-EXPOSE 4000
+EXPOSE 9004
 CMD ["node", "apps/api/dist/main.js"]

@@ -13,8 +13,8 @@ taskkill /FI "WINDOWTITLE eq ClientOS Web" /T /F >nul 2>nul
 
 REM Belt-and-suspenders: if a window was closed by hand but the dev server
 REM process is still holding its port, kill whatever is listening on 3000/4000.
-for /f "tokens=5" %%p in ('netstat -ano ^| findstr ":4000" ^| findstr "LISTENING"') do taskkill /PID %%p /F >nul 2>nul
-for /f "tokens=5" %%p in ('netstat -ano ^| findstr ":3000" ^| findstr "LISTENING"') do taskkill /PID %%p /F >nul 2>nul
+for /f "tokens=5" %%p in ('netstat -ano ^| findstr ":9004" ^| findstr "LISTENING"') do taskkill /PID %%p /F >nul 2>nul
+for /f "tokens=5" %%p in ('netstat -ano ^| findstr ":9003" ^| findstr "LISTENING"') do taskkill /PID %%p /F >nul 2>nul
 
 set COMPOSE_CMD=docker compose
 docker compose version >nul 2>nul

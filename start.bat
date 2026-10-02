@@ -139,8 +139,8 @@ echo.
 echo ============================================
 echo  ClientOS is starting up.
 echo.
-echo    Web:   http://localhost:3000
-echo    API:   http://localhost:4000
+echo    Web:   http://localhost:9003
+echo    API:   http://localhost:9004
 echo.
 echo    Demo login:  alex@meridian.agency / DemoPass123
 echo.

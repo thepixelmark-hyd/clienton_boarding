@@ -152,7 +152,7 @@ export function useUploadLogo(clientId: string) {
     mutationFn: async (file: File) => {
       const form = new FormData();
       form.append("file", file);
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1"}/clients/${clientId}/logo`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:9004/api/v1"}/clients/${clientId}/logo`, {
         method: "POST",
         credentials: "include",
         headers: { "X-Requested-With": "XMLHttpRequest" },
@@ -172,7 +172,7 @@ export function useUploadLogo(clientId: string) {
 }
 
 export function logoUrl(clientId: string): string {
-  return `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1"}/clients/${clientId}/logo`;
+  return `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:9004/api/v1"}/clients/${clientId}/logo`;
 }
 
 // -------------------------------------------------------------------

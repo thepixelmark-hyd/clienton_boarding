@@ -28,7 +28,7 @@ RUN pnpm install --frozen-lockfile
 
 # ---- build ----
 FROM deps AS build
-ARG NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1
+ARG NEXT_PUBLIC_API_URL=http://localhost:9004/api/v1
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 COPY packages/shared packages/shared
 COPY apps/web apps/web
@@ -46,6 +46,6 @@ COPY --from=build /repo/apps/web/public ./apps/web/public
 RUN groupadd --system clientos && useradd --system --gid clientos clientos
 USER clientos
 
-EXPOSE 3000
-ENV PORT=3000
+EXPOSE 9003
+ENV PORT=9003
 CMD ["node", "apps/web/server.js"]

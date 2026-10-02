@@ -33,7 +33,7 @@ android {
         // loopback, reachable from the Android emulator at 10.0.2.2; a
         // release build overrides this at build time (see docs/architecture-assessment.md
         // §9 on API versioning — this is where a real deployed API URL goes).
-        buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:4000/api/v1/\"")
+        buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:9004/api/v1/\"")
     }
 
     buildFeatures {

@@ -311,7 +311,7 @@ export class FormsService {
     ]);
     if (!client) return;
 
-    const requirementUrl = `${process.env.WEB_APP_URL ?? "http://localhost:3000"}/requirements/${requirementId}`;
+    const requirementUrl = `${process.env.WEB_APP_URL ?? "http://localhost:9003"}/requirements/${requirementId}`;
     await Promise.all(
       recipients.map((m) =>
         this.email.sendRequirementSubmitted({

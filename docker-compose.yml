@@ -36,11 +36,11 @@ services:
       DATABASE_URL: "postgresql://clientos:clientos_dev_password@postgres:5432/clientos_dev?schema=public"
       SESSION_SECRET: "replace-with-a-long-random-value-in-every-environment"
       SESSION_COOKIE_NAME: "clientos_session"
-      WEB_APP_URL: "http://localhost:3000"
+      WEB_APP_URL: "http://localhost:9003"
       NODE_ENV: "production"
-      API_PORT: "4000"
+      API_PORT: "9004"
     ports:
-      - "4000:4000"
+      - "9004:9004"
     depends_on:
       postgres:
         condition: service_healthy
@@ -50,9 +50,9 @@ services:
       context: .
       dockerfile: apps/web/Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: "http://localhost:4000/api/v1"
+        NEXT_PUBLIC_API_URL: "http://localhost:9004/api/v1"
     ports:
-      - "3000:3000"
+      - "9003:9003"
     depends_on:
       - api
 

@@ -130,7 +130,7 @@ export interface UploadedFileItem {
 }
 
 export function fileDownloadUrl(fileId: string): string {
-  return `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1"}/files/${fileId}`;
+  return `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:9004/api/v1"}/files/${fileId}`;
 }
 
 export function useFieldFiles(formId: string, submissionId: string, fieldId: string, basePath = "") {
@@ -149,7 +149,7 @@ export function useUploadFieldFile(formId: string, submissionId: string, fieldId
       const form = new FormData();
       form.append("file", file);
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1"}${basePath}/forms/${formId}/submissions/${submissionId}/fields/${fieldId}/files`,
+        `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:9004/api/v1"}${basePath}/forms/${formId}/submissions/${submissionId}/fields/${fieldId}/files`,
         { method: "POST", credentials: "include", headers: { "X-Requested-With": "XMLHttpRequest" }, body: form },
       );
       if (!res.ok) {

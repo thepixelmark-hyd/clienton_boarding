@@ -9,8 +9,8 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   SESSION_SECRET: z.string().min(16, "SESSION_SECRET must be at least 16 characters"),
   SESSION_COOKIE_NAME: z.string().default("clientos_session"),
-  API_PORT: z.coerce.number().int().positive().default(4000),
-  WEB_APP_URL: z.string().url().default("http://localhost:3000"),
+  API_PORT: z.coerce.number().int().positive().default(9004),
+  WEB_APP_URL: z.string().url().default("http://localhost:9003"),
   LOCAL_STORAGE_DIR: z.string().default("./.data/uploads"),
   // All optional: SmtpEmailProvider only activates when SMTP_HOST is set
   // (see email.module.ts); without it, email sends fall back to the
