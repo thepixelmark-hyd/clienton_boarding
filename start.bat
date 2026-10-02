@@ -22,13 +22,20 @@ if errorlevel 1 (
   echo pnpm not found - enabling it via corepack...
   call corepack enable
   call corepack prepare pnpm@12.8.1 --activate
-  where pnpm >nul 2>nul
-  if errorlevel 1 (
-    echo [ERROR] Could not set up pnpm automatically.
-    echo         Install it manually: npm install -g pnpm
-    pause
-    exit /b 1
-  )
+)
+
+REM Some Windows + corepack combinations produce a pnpm.cmd shim that is
+REM found on PATH but fails when actually run (a known corepack bug - the
+REM generated shim points at a path with no .cmd/.exe extension). Self-test
+REM it and fall back to running pnpm through npx, which only needs the
+REM Node.js install already confirmed above, not corepack's shim.
+set PNPM=call pnpm
+pnpm --version >nul 2>nul
+if errorlevel 1 (
+  echo The "pnpm" command found on PATH doesn't run correctly on this
+  echo machine ^(a known corepack/Windows shim issue^) - using
+  echo "npx pnpm@12.8.1" instead for the rest of this script.
+  set PNPM=call npx --yes pnpm@12.8.1
 )
 
 REM ---- 3. Docker Desktop ------------------------------------------------
@@ -112,7 +119,7 @@ if not exist "packages\database\.env" (
 REM ---- 6. Install dependencies (first run only) -------------------------
 if not exist "node_modules" (
   echo Installing dependencies - this can take a few minutes on first run...
-  call pnpm install
+  %PNPM% install
   if errorlevel 1 (
     echo [ERROR] pnpm install failed. See the error above.
     pause
@@ -126,8 +133,8 @@ echo.
 
 REM ---- 7. Prisma client + migrations -------------------------------------
 echo Generating the Prisma client and applying database migrations...
-call pnpm db:generate
-call pnpm db:migrate:deploy
+%PNPM% db:generate
+%PNPM% db:migrate:deploy
 if errorlevel 1 (
   echo [ERROR] Database migration failed.
   echo         Check DATABASE_URL in packages\database\.env and that Postgres is reachable.
@@ -138,13 +145,13 @@ echo.
 
 REM ---- 8. Seed demo data (safe to re-run) --------------------------------
 echo Seeding demo data...
-call pnpm db:seed
+%PNPM% db:seed
 echo.
 
 REM ---- 9. Launch the API and Web dev servers in their own windows --------
 echo Starting the API and Web dev servers...
-start "ClientOS API" cmd /k "cd /d "%~dp0" && pnpm dev:api"
-start "ClientOS Web" cmd /k "cd /d "%~dp0" && pnpm dev:web"
+start "ClientOS API" cmd /k "cd /d "%~dp0" && %PNPM% dev:api"
+start "ClientOS Web" cmd /k "cd /d "%~dp0" && %PNPM% dev:web"
 
 echo.
 echo ============================================
